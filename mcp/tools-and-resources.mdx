@@ -287,8 +287,11 @@ overwritten, the rest are preserved. Pass `null` to clear a meta field.
 
 ### `generate_video`
 
-Premium short-form clip (Kling v2.1 / Runway Gen4). Returns a Job; poll
-`get_job` until complete. Charges 100 credits per call.
+Short-form clip generation. Returns a Job; poll `get_job` until complete.
+Two tiers — pick `budget` (default, Wan 2.1) for **40 credits** or
+`premium` (Kling v2.1 / Runway Gen4) for **300 credits**. Premium requires a
+**Build** plan or higher; Free / Hobby calling with `tier=premium` get
+`402 plan_required`.
 
 ```json
 {
@@ -296,10 +299,30 @@ Premium short-form clip (Kling v2.1 / Runway Gen4). Returns a Job; poll
   "input": {
     "prompt": "slow-mo pour-over coffee, warm morning light, cinematic",
     "aspect_ratio": "9:16",
-    "duration_seconds": 5
+    "duration_seconds": 5,
+    "tier": "budget"
   }
 }
 ```
+
+### `list_newsletter_subscribers` / `list_contact_form_submissions`
+
+Read-only listings of the project's captured leads. Both support `page`,
+`page_size` (max 200) and `search` (substring match against email + subject
++ message). The newsletter listing also accepts an `app_lead` boolean to
+filter trial leads from real subscribers.
+
+```json
+{
+  "name": "list_contact_form_submissions",
+  "input": { "page": 1, "page_size": 50, "search": "demo" }
+}
+```
+
+Submissions are written to the project from the **public** v1 endpoints
+(`POST /v1/newsletters/subscribe`, `POST /v1/contact-forms`) which fire
+`newsletter.subscribed` / `contact_form.submitted` webhook events. These
+tools don't write — they're for the AI to inspect what came in.
 
 ## Prompts (slash commands)
 

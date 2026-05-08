@@ -172,3 +172,58 @@ keys for arrays follow `section.field.0.subfield`.
 | `PATCH /v1/brand`                              | [Brand](/api-reference#tag/Brand)        |
 | `POST /v1/images/upload`                       | [Images](/api-reference#tag/Images)      |
 | `POST /v1/images/generate`                     | [Images](/api-reference#tag/Images)      |
+| `POST /v1/newsletters/subscribe` (public)      | [Forms](/api-reference#tag/Forms)        |
+| `GET /v1/newsletters`                          | [Forms](/api-reference#tag/Forms)        |
+| `DELETE /v1/newsletters/{id}`                  | [Forms](/api-reference#tag/Forms)        |
+| `POST /v1/contact-forms` (public)              | [Forms](/api-reference#tag/Forms)        |
+| `GET /v1/contact-forms`                        | [Forms](/api-reference#tag/Forms)        |
+| `DELETE /v1/contact-forms/{id}`                | [Forms](/api-reference#tag/Forms)        |
+
+## Forms — newsletter & contact
+
+Most AI-built sites need two simple capture surfaces: an email-collector for
+newsletters and a free-form contact form. Neural Draft ships both as
+first-class endpoints — no schemas to design, no spam-handling glue, and free
+(no credits charged, since these are storage + delivery, not AI).
+
+### Public submit
+
+The submit endpoints are public. Authenticate the project with a server-side
+API key in `X-NeuralDraft-Project-Key` (or pass `?project_id=` for
+unauthenticated client-side embeds where you don't want to ship a key):
+
+```bash
+# Newsletter — idempotent. Re-submitting an existing email returns 200 with
+# status="already_subscribed" instead of an error.
+curl -X POST https://api.neuraldraft.io/v1/newsletters/subscribe \
+  -H "X-NeuralDraft-Project-Key: $NEURAL_DRAFT_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"email":"jane@example.com","app_lead":false}'
+
+# Contact form — `data` is free-form JSON for whatever your form collects;
+# IP and user-agent are merged in server-side for spam triage.
+curl -X POST https://api.neuraldraft.io/v1/contact-forms \
+  -H "X-NeuralDraft-Project-Key: $NEURAL_DRAFT_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "jane@example.com",
+    "subject": "Demo request",
+    "message": "We are evaluating Neural Draft for our next launch.",
+    "data": {"company":"Acme","headcount":12}
+  }'
+```
+
+### Webhook events
+
+Both submits fire webhook events through the standard fan-out so you can pipe
+them into Slack, a CRM, or your own automation:
+
+- `newsletter.subscribed` — `{ id, email, app_lead, subscribed_at }`
+- `contact_form.submitted` — `{ id, email, subject, message, data, submitted_at }`
+
+### Admin list & delete
+
+Listing and deleting submissions requires an API key with `forms:read` /
+`forms:write` scope (or `*`). Both list endpoints support `?page` /
+`?page_size` (max 200) and `?search=`; the newsletter list also accepts
+`?app_lead=true` to filter out trial leads from your real subscriber list.

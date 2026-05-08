@@ -153,11 +153,18 @@ tags:
     description: |
       Outgoing webhooks. Subscribe a URL to events your project cares about.
       All deliveries signed with HMAC-SHA256.
+  - name: Forms
+    description: |
+      Lead-capture surfaces — newsletter subscribe and contact-form submit.
+      Public submit endpoints (no auth, project resolved via
+      `X-NeuralDraft-Project-Key` or `?project_id=`); admin list/delete
+      endpoints require an API key with `forms:read` / `forms:write` scope.
+      No credits charged — this is storage + delivery, not AI.
 x-tagGroups:
   - name: Getting started
     tags: [Health, Projects, Brand]
   - name: CMS
-    tags: [Content, Components, Images]
+    tags: [Content, Components, Images, Forms]
   - name: Content marketing
     tags: [Blog, Social]
   - name: Operations
@@ -5619,6 +5626,208 @@ paths:
             $client->post('webhook-deliveries/whd_2Nh5XyZAbCdE/retry', [
               'headers' => ['Authorization' => 'Bearer '.$key],
             ]);
+  /newsletters/subscribe:
+    post:
+      tags: [Forms]
+      summary: Subscribe to a project newsletter
+      description: |
+        **Public** endpoint — no API key required when called from a browser
+        embed. The project is resolved via the
+        `X-NeuralDraft-Project-Key` header (recommended for server-side calls)
+        or `?project_id=<id>` query param (browser embeds where you can't
+        ship a secret key). Idempotent — re-submitting an existing email
+        returns 200 with `status="already_subscribed"` rather than an error.
+        Free; no credits charged.
+      operationId: subscribeNewsletter
+      security: []
+      parameters:
+        - in: header
+          name: X-NeuralDraft-Project-Key
+          schema: { type: string }
+          required: false
+          description: Project API key (alternative to query param).
+        - in: query
+          name: project_id
+          schema: { type: integer }
+          required: false
+          description: Project ID for unauthenticated browser embeds.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: { type: string, format: email, maxLength: 255 }
+                app_lead:
+                  type: boolean
+                  default: false
+                  description: Marks the lead as coming from a "want the app" landing surface vs. a regular newsletter signup.
+            examples:
+              basic:
+                value: { email: "jane@example.com" }
+              app_lead:
+                value: { email: "jane@example.com", app_lead: true }
+      responses:
+        "201":
+          description: New subscription created.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/NewsletterSubscription"
+        "200":
+          description: Email already subscribed (idempotent).
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/NewsletterSubscription"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+  /newsletters:
+    get:
+      tags: [Forms]
+      summary: List newsletter subscribers
+      description: Requires `forms:read` scope.
+      operationId: listNewsletter
+      parameters:
+        - in: query
+          name: app_lead
+          schema: { type: boolean }
+          description: Filter to/from app-lead-only subscribers.
+        - in: query
+          name: search
+          schema: { type: string, maxLength: 255 }
+        - in: query
+          name: page
+          schema: { type: integer, minimum: 1, default: 1 }
+        - in: query
+          name: page_size
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+      responses:
+        "200":
+          description: Paginated subscribers.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/NewsletterSubscription" }
+                  meta: { $ref: "#/components/schemas/PaginationMeta" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /newsletters/{id}:
+    delete:
+      tags: [Forms]
+      summary: Delete (unsubscribe) a newsletter subscriber
+      description: Requires `forms:write` scope.
+      operationId: destroyNewsletter
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "204": { description: Subscriber removed. }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /contact-forms:
+    post:
+      tags: [Forms]
+      summary: Submit a contact form
+      description: |
+        **Public** endpoint — no API key required when called from a browser
+        embed. The project is resolved via the
+        `X-NeuralDraft-Project-Key` header or `?project_id=<id>` query param.
+        `data` is free-form JSON for whatever your form collects; IP and
+        user-agent are merged in server-side for spam triage.
+        Free; no credits charged.
+      operationId: submitContactForm
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: { type: string, format: email, maxLength: 255 }
+                subject: { type: string, maxLength: 500, nullable: true }
+                message: { type: string, maxLength: 10000, nullable: true }
+                data:
+                  type: object
+                  additionalProperties: true
+                  description: Arbitrary JSON for custom form fields.
+      responses:
+        "201":
+          description: Submission stored.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/ContactFormSubmission"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+    get:
+      tags: [Forms]
+      summary: List contact-form submissions
+      description: Requires `forms:read` scope.
+      operationId: listContactForms
+      parameters:
+        - in: query
+          name: search
+          schema: { type: string, maxLength: 255 }
+          description: Substring match against email, subject, message.
+        - in: query
+          name: page
+          schema: { type: integer, minimum: 1, default: 1 }
+        - in: query
+          name: page_size
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+      responses:
+        "200":
+          description: Paginated submissions.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/ContactFormSubmission" }
+                  meta: { $ref: "#/components/schemas/PaginationMeta" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /contact-forms/{id}:
+    delete:
+      tags: [Forms]
+      summary: Delete a contact-form submission
+      description: Requires `forms:write` scope.
+      operationId: destroyContactForm
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "204": { description: Submission removed. }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
 components:
   securitySchemes:
     apiKeyAuth:
@@ -6860,6 +7069,42 @@ components:
           type: array
           items: {}
         meta: { $ref: "#/components/schemas/PaginationMeta" }
+    NewsletterSubscription:
+      type: object
+      required: [id, email]
+      properties:
+        id: { type: integer, example: 42 }
+        email: { type: string, format: email, example: "jane@example.com" }
+        app_lead: { type: boolean, example: false }
+        status:
+          type: string
+          enum: [subscribed, already_subscribed]
+          description: Only present on the public submit endpoint.
+        subscribed_at:
+          type: string
+          format: date-time
+          nullable: true
+    ContactFormSubmission:
+      type: object
+      required: [id, email]
+      properties:
+        id: { type: integer, example: 17 }
+        email: { type: string, format: email, example: "jane@example.com" }
+        subject: { type: string, nullable: true, example: "Demo request" }
+        message: { type: string, nullable: true }
+        data:
+          type: object
+          additionalProperties: true
+          nullable: true
+          description: Free-form payload, plus server-merged `ip`, `user_agent`, `submitted_at`.
+        status:
+          type: string
+          enum: [received]
+          description: Only present on the public submit endpoint.
+        submitted_at:
+          type: string
+          format: date-time
+          nullable: true
   responses:
     BadRequest:
       description: Malformed request — missing required field, invalid JSON, etc.
