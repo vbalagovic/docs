@@ -1,0 +1,94 @@
+---
+title: "Changelog"
+description: "Reverse-chronological release notes. We tag every breaking change with `Breaking`; non-breaking entries with `Added`, `Changed`, or `Fixed`."
+---
+
+We follow [SemVer](https://semver.org/) on the `/v1/*` surface. Breaking
+changes are versioned and announced 90 days in advance. Subscribe to the RSS
+feed or the `release.shipped` webhook for automated notifications.
+
+## May 2026 — `v1.0.0`: Public launch
+
+The v1 Project API is generally available.
+
+**Added**
+
+- All five pillars exposed under `/v1/*`: CMS (`/content`, `/components`,
+  `/brand`, `/images`), Blog (`/blog-posts`, `/categories`, `/tags`), Social
+  (`/social-posts`, `/social-accounts`), Booking (`/services`, `/bookings`,
+  `/booking-settings`, `/calendar-feeds`), Commerce (`/products`, `/orders`,
+  `/checkout-sessions`, `/connect/*`).
+- Async work tracked by a unified `Job` resource (`/jobs`, `/jobs/{id}`,
+  `/jobs/{id}/stream`) supporting blog generation, social generation, image
+  generation, batch translation, content plans, and full-website generation.
+- Outgoing webhook system (`/webhook-endpoints`) with HMAC-SHA256 signatures,
+  five-tier retry, replayable deliveries, signing-secret rotation.
+- TypeScript SDK on npm: `@neuraldraft/sdk`. Auto-generated from this
+  OpenAPI spec.
+- MCP server on npm: `@neuraldraft/mcp`. Stdio transport. Resources, tools
+  and slash-command prompts.
+- Idempotency keys honoured on all mutating endpoints.
+- Per-key scopes (`content:read`, `commerce:write`, etc.) with `*` for full
+  access.
+- Embeddable widgets at `widgets.neuraldraft.io/v1/*` for booking, buy
+  button, cart, product card.
+- `/v1/public/*` surface for browser-side reads with no auth and per-IP
+  rate limits.
+- `llms.txt` and `llms-full.txt` published at the docs root for AI ingestion.
+- This documentation site at [docs.neuraldraft.io](https://docs.neuraldraft.io).
+
+**Changed**
+
+- Onboarding: `/register` now offers two paths — API-first (default) and
+  legacy SaaS (`/register/legacy`). Existing tenants are unaffected.
+- Pricing: usage-based credit pricing with hard zero stop is the new default.
+  See [pricing-and-credits](/pricing-and-credits). Legacy tier customers are
+  grandfathered for at least 12 months.
+
+**Fixed**
+
+- The dual-model translation bug (`Translation` vs `TenantHomepageTranslation`)
+  that some legacy tenants reported. The v1 contract reads/writes a single
+  table; the admin's translation endpoints were converged in the same release.
+- Inline-editor key normalisation (underscore → dot mismatch on save vs
+  fetch).
+- Blog post slug-to-id resolution now consistent between the admin and the
+  v1 API.
+
+## April 2026 — `v0.9.0`: API-first preview
+
+The pivot announcement and first invite-only API access.
+
+**Added**
+
+- API-key infrastructure (`landlord` table, scopes, generate/revoke).
+- `/v1/projects/*` skeleton with rate limit headers and the standard error
+  envelope.
+- Bearer-token middleware (`auth.api_key`), scope middleware
+  (`scope.api_key`), and per-key sliding-window rate limit
+  (`api.rate_limit`).
+- Internal docs (`docs/PIVOT-API-FIRST.md`,
+  `docs/api-mapping/*`, `docs/mcp-server/SCAFFOLD-PLAN.md`).
+
+**Changed**
+
+- Marketing positioning: "AI-native backend platform" replacing "AI
+  website builder for SMBs."
+- Onboarding form: 6 fields, ~90 seconds, populates the brand context
+  resource the MCP server exposes.
+
+**Fixed**
+
+- Page generator unique-constraint bug on tenants with whitespace-trimmed
+  slugs.
+- Several streaming-event regressions in the admin chat (`done` event,
+  raw-action block hiding).
+
+## How to subscribe
+
+- **RSS**: `https://docs.neuraldraft.io/changelog/feed.xml`
+- **Webhook**: subscribe `release.shipped` on `/v1/webhook-endpoints`. Each
+  event includes a link to the relevant changelog entry and a flag for whether
+  it's breaking.
+- **Status page**: `https://status.neuraldraft.io` — incidents and planned
+  maintenance.

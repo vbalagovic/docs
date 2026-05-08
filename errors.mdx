@@ -1,0 +1,214 @@
+---
+title: "Errors"
+description: "RFC 7807 problem+json shape, the full code catalog, and retry guidance per error class."
+---
+
+Every error response from the v1 API follows
+[RFC 7807](https://datatracker.ietf.org/doc/html/rfc7807) `application/problem+json`.
+Branch on the `code` field — it's stable. The `title` and `detail` are for
+humans and may be reworded over time.
+
+## Shape
+
+```json
+{
+  "type": "https://api.neuraldraft.io/errors/validation_failed",
+  "title": "Validation failed",
+  "status": 422,
+  "code": "validation_failed",
+  "detail": "One or more fields failed validation.",
+  "instance": "req_2Nh4PqRsTuVw",
+  "errors": {
+    "customer_email": ["The customer email field must be a valid email."],
+    "starts_at": ["The starts at field must be a valid ISO 8601 date."]
+  }
+}
+```
+
+| Field      | Notes                                                                  |
+| ---------- | ---------------------------------------------------------------------- |
+| `type`     | URI describing the error class. Stable, dereferenceable.               |
+| `title`    | Human-readable summary. Don't pattern-match on this.                   |
+| `status`   | HTTP status code (mirrors the response status).                        |
+| `code`     | **Stable machine identifier.** Branch on this.                         |
+| `detail`   | Human-readable explanation of this particular error.                   |
+| `instance` | Request id. Also returned as the `X-Request-Id` response header.       |
+| `errors`   | Field-level errors (only on `422`).                                    |
+
+Always log the `instance` (request id) — when you open a support ticket, that's
+the first thing we'll ask for.
+
+## Code catalog
+
+| HTTP  | `code`                  | Meaning                                                                            | Retry?                              |
+| ----- | ----------------------- | ---------------------------------------------------------------------------------- | ----------------------------------- |
+| `400` | `bad_request`           | Malformed request — invalid JSON, missing required body field, wrong method.       | No. Fix the request.                |
+| `401` | `unauthorized`          | Missing, malformed, expired, or revoked API key.                                   | No. Re-issue the key.               |
+| `402` | `out_of_credits`        | Project balance is zero. Top up or upgrade.                                        | No, until credits are added.        |
+| `403` | `forbidden`             | Key is valid but lacks the required scope.                                         | No. Re-issue with the missing scope.|
+| `404` | `not_found`             | Resource does not exist (or your key can't see it).                                | No.                                 |
+| `409` | `conflict`              | Generic conflict — e.g. slug already taken, key limit reached.                     | Sometimes. Read `detail`.           |
+| `409` | `slot_unavailable`      | Booking slot was taken between availability check and create.                      | Yes — refresh availability.         |
+| `409` | `idempotency_conflict`  | Idempotency key reused with different parameters.                                  | No. Use a fresh key or match params.|
+| `409` | `connect_not_ready`     | Stripe Connect not onboarded; checkout cannot be created.                          | No, until Connect is set up.        |
+| `422` | `validation_failed`     | One or more fields failed validation. See `errors` map.                            | No. Fix and resend.                 |
+| `429` | `rate_limited`          | Per-project rate limit exceeded. Honour `Retry-After`.                             | Yes — exponential backoff.          |
+| `500` | `internal_error`        | Server bug. We're paged.                                                           | Yes — exponential backoff, alert.   |
+| `502` | `upstream_unavailable`  | Upstream AI provider error (model, image gen, etc.). Often transient.              | Yes — exponential backoff.          |
+| `503` | `service_unavailable`   | Maintenance or transient outage. Honour `Retry-After`.                             | Yes — exponential backoff.          |
+
+### `out_of_credits`
+
+The most common failure for active projects. The response includes the credit
+delta required:
+
+```json
+{
+  "type": "https://api.neuraldraft.io/errors/out_of_credits",
+  "title": "Out of credits",
+  "status": 402,
+  "code": "out_of_credits",
+  "detail": "This operation requires 400 credits but the project balance is 12. Top up or upgrade your plan.",
+  "instance": "req_2Nh4PqRsTuVw"
+}
+```
+
+Subscribe to the `project.credits_low` webhook (fired at 20% remaining) and
+the `project.credits_exhausted` event (fired the moment the first 402 fires) —
+both let you alert your team or auto-top-up.
+
+### `validation_failed`
+
+Field-level errors are returned as an `errors` map; arrays of strings keyed by
+the offending field. Mirror the keys back to the user.
+
+```json
+{
+  "code": "validation_failed",
+  "status": 422,
+  "errors": {
+    "customer_email": ["The customer email field must be a valid email."],
+    "starts_at": ["The starts at field must be a valid ISO 8601 date."]
+  }
+}
+```
+
+### `rate_limited`
+
+The response carries `Retry-After` (seconds) and the standard rate-limit
+headers. See [rate-limits](/rate-limits) for the full backoff strategy.
+
+### `slot_unavailable`
+
+A booking-specific 409: the slot was taken between the time you ran an
+availability check and the time you posted the booking. Refresh availability
+and let the user pick again. Don't auto-retry.
+
+## Retry strategy
+
+For retryable error classes, use **exponential backoff with full jitter**.
+Cap retries at 5 attempts; cap any single delay at 30 seconds.
+
+<CodeGroup>
+
+```ts Node
+async function withRetry<T>(
+  fn: () => Promise<T>,
+  options: { maxAttempts?: number; baseMs?: number; capMs?: number } = {}
+): Promise<T> {
+  const { maxAttempts = 5, baseMs = 250, capMs = 30_000 } = options;
+  let attempt = 0;
+  let lastError: unknown;
+  while (attempt < maxAttempts) {
+    try {
+      return await fn();
+    } catch (err: any) {
+      lastError = err;
+      const status = err?.status;
+      const code = err?.body?.code;
+      const retryable =
+        status === 429 ||
+        status === 502 ||
+        status === 503 ||
+        code === "upstream_unavailable";
+      if (!retryable) throw err;
+
+      const retryAfter = Number(err?.headers?.["retry-after"]);
+      const expBackoff = Math.min(capMs, baseMs * 2 ** attempt);
+      const jittered = Math.random() * expBackoff;
+      const delay = Number.isFinite(retryAfter)
+        ? retryAfter * 1000
+        : jittered;
+      await new Promise((r) => setTimeout(r, delay));
+      attempt++;
+    }
+  }
+  throw lastError;
+}
+```
+
+```python Python
+import random, time
+
+def with_retry(fn, *, max_attempts=5, base_ms=250, cap_ms=30_000):
+    last = None
+    for attempt in range(max_attempts):
+        try:
+            return fn()
+        except ApiError as e:
+            last = e
+            retryable = e.status in (429, 502, 503) or e.code == "upstream_unavailable"
+            if not retryable:
+                raise
+            retry_after = e.headers.get("retry-after")
+            if retry_after is not None:
+                delay = int(retry_after) * 1000
+            else:
+                delay = random.uniform(0, min(cap_ms, base_ms * (2 ** attempt)))
+            time.sleep(delay / 1000)
+    raise last
+```
+
+</CodeGroup>
+
+A few rules of thumb:
+
+- Never retry `400`, `401`, `403`, `404`, `409` (except `slot_unavailable`,
+  which means "refresh and let the user choose"), or `422`. They are deterministic.
+- Always honour `Retry-After` if present; the platform sets it precisely.
+- Long-running jobs are submitted via `202 Accepted` and tracked via
+  [`/jobs/{id}`](/api-reference#tag/Jobs). The submit call is idempotent if you
+  pass an `Idempotency-Key`; the job itself is the right place to handle
+  failures, not the submit endpoint.
+
+## Idempotency
+
+`POST` and other mutating endpoints accept an `Idempotency-Key` header (any
+unique string up to 255 chars). Retries with the same key within 24 hours
+return the original response without re-executing the side effect.
+
+```bash
+curl -X POST https://api.neuraldraft.io/v1/blog-posts \
+  -H "Authorization: Bearer $NEURAL_DRAFT_API_KEY" \
+  -H "Idempotency-Key: post-$(uuidgen)" \
+  -H "Content-Type: application/json" \
+  -d '{"title":"Hello","content":"<p>Hi</p>","language_code":"en"}'
+```
+
+If you reuse a key with **different** parameters (different body, different
+path), the request fails with `409 idempotency_conflict`. Use one key per
+logical operation; UUIDs are fine.
+
+## When to ask for help
+
+Open a ticket with `support@neuraldraft.io` or
+[the dashboard support widget](https://app.neuraldraft.io/support) and
+include:
+
+1. The `instance` (request id) — also `X-Request-Id` on the response.
+2. The exact request URL and method.
+3. The response status and `code`.
+4. The approximate timestamp (UTC).
+
+We'll trace the request end-to-end and respond within one business day on the
+free tier, four hours on Build, and one hour on Scale.

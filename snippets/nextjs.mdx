@@ -1,0 +1,237 @@
+---
+title: "Next.js"
+description: "App Router server actions, build-time content fetches, and a minimal blog wired to Neural Draft."
+---
+
+This snippet is a working integration for Next.js 15 (App Router) — the
+fastest path to a production site whose content, blog, and webhooks all live
+in Neural Draft.
+
+## Install
+
+```bash
+npm install @neuraldraft/sdk
+```
+
+Add the env vars:
+
+```bash filename=".env.local"
+NEURAL_DRAFT_API_KEY=ndsk_live_...
+NEURAL_DRAFT_WEBHOOK_SECRET=whsec_...
+```
+
+## The shared client
+
+```ts filename="lib/neural-draft.ts"
+import { NeuralDraft } from "@neuraldraft/sdk";
+import { createHmac, timingSafeEqual } from "node:crypto";
+
+if (!process.env.NEURAL_DRAFT_API_KEY) {
+  throw new Error("Missing NEURAL_DRAFT_API_KEY in env.");
+}
+
+export const neuralDraft = new NeuralDraft({
+  apiKey: process.env.NEURAL_DRAFT_API_KEY,
+});
+
+/**
+ * Verify the HMAC-SHA256 signature on an incoming Neural Draft webhook.
+ * Reject deliveries older than 5 minutes (replay protection).
+ */
+export function verifyNeuralDraftSignature(
+  body: string,
+  header: string,
+  secret = process.env.NEURAL_DRAFT_WEBHOOK_SECRET ?? "",
+  toleranceSeconds = 300
+): boolean {
+  const parts = Object.fromEntries(
+    header.split(",").map((p) => p.split("=") as [string, string])
+  );
+  const t = Number(parts.t);
+  const v1 = parts.v1;
+  if (!Number.isFinite(t) || !v1 || !secret) return false;
+
+  const now = Math.floor(Date.now() / 1000);
+  if (Math.abs(now - t) > toleranceSeconds) return false;
+
+  const signed = `${t}.${body}`;
+  const expected = createHmac("sha256", secret).update(signed).digest("hex");
+
+  const a = Buffer.from(expected, "hex");
+  const b = Buffer.from(v1, "hex");
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+```
+
+## A blog page that re-builds when content changes
+
+Next.js + ISR + the `content.changed` / `blog_post.published` webhooks gives
+you a static site that re-renders the second something updates.
+
+```tsx filename="app/blog/page.tsx"
+import Link from "next/link";
+import { neuralDraft } from "@/lib/neural-draft";
+
+export const revalidate = 3600; // hourly fallback; webhooks force on-change.
+
+export default async function BlogIndex() {
+  const { data: posts } = await neuralDraft.blogPosts.list({
+    status: "published",
+    lang: "en",
+    per_page: 20,
+  });
+
+  return (
+    <main className="prose mx-auto py-12">
+      <h1>Blog</h1>
+      <ul>
+        {posts.map((p) => (
+          <li key={p.id}>
+            <Link href={`/blog/${p.slug}`}>
+              <h2>{p.title}</h2>
+              <p>{p.excerpt}</p>
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </main>
+  );
+}
+```
+
+```tsx filename="app/blog/[slug]/page.tsx"
+import { notFound } from "next/navigation";
+import { neuralDraft } from "@/lib/neural-draft";
+
+export const revalidate = 3600;
+
+export async function generateStaticParams() {
+  const { data } = await neuralDraft.blogPosts.list({
+    status: "published",
+    per_page: 100,
+  });
+  return data.map((p) => ({ slug: p.slug }));
+}
+
+export default async function PostPage({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}) {
+  const { slug } = await params;
+  const post = await neuralDraft.blogPosts.bySlug(slug, { lang: "en" }).catch(() => null);
+  if (!post) notFound();
+
+  return (
+    <article className="prose mx-auto py-12">
+      <h1>{post.title}</h1>
+      {post.featured_image && (
+        <img src={post.featured_image} alt={post.title} />
+      )}
+      <div dangerouslySetInnerHTML={{ __html: post.content }} />
+    </article>
+  );
+}
+```
+
+## A webhook receiver that triggers re-validation
+
+```ts filename="app/api/neural-draft/route.ts"
+import { revalidatePath, revalidateTag } from "next/cache";
+import { NextResponse } from "next/server";
+import { verifyNeuralDraftSignature } from "@/lib/neural-draft";
+
+export async function POST(req: Request) {
+  const body = await req.text();
+  const sig = req.headers.get("x-neural-draft-signature") ?? "";
+  if (!verifyNeuralDraftSignature(body, sig)) {
+    return new NextResponse("invalid signature", { status: 401 });
+  }
+
+  const event = JSON.parse(body) as { type: string; data: any };
+
+  switch (event.type) {
+    case "blog_post.published":
+    case "blog_post.translated":
+      revalidatePath("/blog");
+      revalidatePath(`/blog/${event.data.slug}`);
+      break;
+    case "content.changed":
+      revalidatePath("/", "layout"); // full-site invalidate
+      break;
+    default:
+      break;
+  }
+
+  return NextResponse.json({ received: true });
+}
+```
+
+## Server action to create a post
+
+```ts filename="app/blog/new/actions.ts"
+"use server";
+
+import { redirect } from "next/navigation";
+import { neuralDraft } from "@/lib/neural-draft";
+
+export async function createDraft(formData: FormData) {
+  const post = await neuralDraft.blogPosts.create({
+    title: String(formData.get("title")),
+    content: String(formData.get("content")),
+    language_code: "en",
+    status: "draft",
+  });
+
+  redirect(`/blog/${post.slug}`);
+}
+```
+
+```tsx filename="app/blog/new/page.tsx"
+import { createDraft } from "./actions";
+
+export default function NewPostPage() {
+  return (
+    <form action={createDraft} className="prose mx-auto py-12 space-y-4">
+      <h1>New post</h1>
+      <input name="title" required className="block w-full border p-2" />
+      <textarea name="content" required rows={8} className="block w-full border p-2" />
+      <button type="submit" className="rounded bg-purple-600 px-4 py-2 text-white">
+        Save draft
+      </button>
+    </form>
+  );
+}
+```
+
+## A storefront product card
+
+```tsx filename="components/ProductCard.tsx"
+import { neuralDraft } from "@/lib/neural-draft";
+
+export async function ProductCard({ slug }: { slug: string }) {
+  const product = await neuralDraft.publicProducts.bySlug(slug);
+
+  return (
+    <article className="rounded-lg border p-6">
+      {product.images?.[0] && (
+        <img src={product.images[0]} alt={product.name} className="rounded" />
+      )}
+      <h3 className="mt-3 text-lg font-semibold">{product.name}</h3>
+      <p className="mt-1 text-sm text-zinc-500">{product.short_description}</p>
+      <p className="mt-2 font-bold">
+        {(product.price / 100).toFixed(2)} {product.currency.toUpperCase()}
+      </p>
+    </article>
+  );
+}
+```
+
+## Notes
+
+- `revalidatePath` requires Next.js 14+. On 13, swap to `res.revalidate()`
+  in a Pages Router handler.
+- The webhook route MUST read raw body via `req.text()` — `req.json()` parses
+  and re-encodes, breaking the HMAC.
+- Build-time `generateStaticParams` is bounded by your rate limit. Use
+  `per_page: 100` and paginate if you have more than a few hundred posts.

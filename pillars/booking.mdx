@@ -1,0 +1,219 @@
+---
+title: "Booking"
+description: "Bookable services, weekly availability, slot lookup, public booking flow, Stripe-paid bookings, and an embeddable widget."
+---
+
+The Booking pillar is a Cal.com-replacement that an AI tool can drop into a
+Lovable-built site without you wiring anything. It supports two booking
+shapes:
+
+- **Time-slot bookings** — appointments, classes, consultations.
+- **Date-range bookings** — rentals, multi-night stays.
+
+Both come with weekly availability rules, per-day overrides, calendar feed
+sync (Airbnb, Booking.com, VRBO, iCal), and optional Stripe-paid
+upfront-payment flows.
+
+## What this gives you
+
+- **Bookable services** with price, currency, duration (or min/max nights),
+  buffers, advance/notice rules, cancellation policy.
+- **Availability** — weekly recurring schedule + date overrides + blocked dates.
+- **Public lookup** — list services, list available dates and slots, all
+  without auth.
+- **Public booking flow** — `POST /v1/public/bookings` with rate limiting and
+  optional Stripe Checkout.
+- **Admin lifecycle** — confirm, cancel, complete, no-show, and stats.
+- **Calendar sync** — pull external feeds in; we block matching dates so
+  double-booking is impossible.
+- **Embeddable widget** — drop a `<script>` tag and a `<div>` to render a
+  multi-step booking widget on any page.
+
+## Quick example
+
+A common shape: list services publicly, fetch slots for a given date, create
+a booking, surface a confirmation reference back to the user.
+
+<CodeGroup>
+
+```bash cURL
+# List services (public, no auth)
+curl "https://api.neuraldraft.io/v1/public/services?project_id=$PROJECT_ID"
+
+# Available slots for a given date
+curl "https://api.neuraldraft.io/v1/public/services/30-min-consult/availability/slots?date=2026-04-25"
+
+# Create a booking
+curl -X POST https://api.neuraldraft.io/v1/public/bookings \
+  -H "Content-Type: application/json" \
+  -d '{
+    "service_id": 12,
+    "starts_at": "2026-04-25T14:00:00Z",
+    "customer_name": "Ada Lovelace",
+    "customer_email": "ada@example.com",
+    "customer_phone": "+44 7000 000 000",
+    "customer_notes": "First-time consult"
+  }'
+```
+
+```ts Node
+import { NeuralDraft } from "@neuraldraft/sdk";
+
+const nd = new NeuralDraft({ apiKey: process.env.NEURAL_DRAFT_API_KEY! });
+
+// Slots for a date
+const { data: slots } = await nd.public.services.availability.slots(
+  "30-min-consult",
+  { date: "2026-04-25" }
+);
+
+// Book the first available
+const booking = await nd.public.bookings.create({
+  service_id: 12,
+  starts_at: slots[0].starts_at,
+  customer_name: "Ada Lovelace",
+  customer_email: "ada@example.com",
+});
+
+console.log(booking.booking_reference); // "BK-20260425-A1B2"
+```
+
+</CodeGroup>
+
+## Common workflows
+
+### 1. Define a bookable service
+
+```bash
+curl -X POST https://api.neuraldraft.io/v1/services \
+  -H "Authorization: Bearer $NEURAL_DRAFT_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "30-minute consultation",
+    "slug": "30-min-consult",
+    "description": "Free 30-minute discovery call.",
+    "price": 0,
+    "currency": "gbp",
+    "booking_type": "time_slot",
+    "duration_minutes": 30,
+    "buffer_after_minutes": 5,
+    "min_notice_hours": 24,
+    "max_advance_days": 30,
+    "cancellation_hours": 12,
+    "status": "active"
+  }'
+```
+
+Set `price: 0` for free services or any positive integer (in cents) to charge
+via Stripe Checkout. Paid services require Stripe Connect to be onboarded —
+see [commerce](/pillars/commerce).
+
+### 2. Set the weekly availability
+
+```bash
+curl -X PUT https://api.neuraldraft.io/v1/services/12/availability \
+  -H "Authorization: Bearer $NEURAL_DRAFT_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "schedule": [
+      { "day": 1, "start": "09:00", "end": "17:00" },
+      { "day": 2, "start": "09:00", "end": "17:00" },
+      { "day": 3, "start": "09:00", "end": "17:00" },
+      { "day": 4, "start": "09:00", "end": "17:00" },
+      { "day": 5, "start": "09:00", "end": "13:00" }
+    ]
+  }'
+```
+
+Days are 0 (Sunday) to 6 (Saturday). Times are 24-hour, project timezone (set
+in `/v1/booking-settings`).
+
+### 3. Block specific dates
+
+```bash
+curl -X POST https://api.neuraldraft.io/v1/services/12/availability/blocks \
+  -H "Authorization: Bearer $NEURAL_DRAFT_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"date":"2026-04-22"}'
+```
+
+### 4. Drop the booking widget into a page
+
+The fastest path. The MCP server can do this for you in one tool call; or
+manually:
+
+```html
+<div data-nd-widget="booking" data-service-id="12" data-theme="auto"></div>
+<script src="https://widgets.neuraldraft.io/v1/booking.js" defer></script>
+```
+
+The widget reads your brand colors and fonts automatically; the user picks a
+date, picks a slot, fills the form, and confirms. Stripe Checkout flows are
+handled inline.
+
+### 5. Sync external calendars
+
+Pull-in Airbnb / Booking.com / VRBO / iCal feeds so dates blocked elsewhere
+can't be double-booked here.
+
+```bash
+curl -X POST https://api.neuraldraft.io/v1/services/12/calendar-feeds \
+  -H "Authorization: Bearer $NEURAL_DRAFT_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Airbnb",
+    "platform": "airbnb",
+    "feed_url": "https://www.airbnb.com/calendar/ical/123.ics?s=...",
+    "sync_interval_minutes": 30
+  }'
+```
+
+We sync on a schedule and surface `last_sync_status` on the resource.
+
+### 6. Confirm or cancel from the admin
+
+```bash
+curl -X POST https://api.neuraldraft.io/v1/bookings/452/confirm \
+  -H "Authorization: Bearer $NEURAL_DRAFT_API_KEY"
+
+curl -X POST https://api.neuraldraft.io/v1/bookings/452/cancel \
+  -H "Authorization: Bearer $NEURAL_DRAFT_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"reason":"Customer requested rescheduling"}'
+```
+
+The customer-facing equivalents (`/v1/public/bookings/{ref}/cancel`)
+enforce your cancellation policy; the admin path overrides it.
+
+### 7. Subscribe to lifecycle events
+
+```bash
+curl -X POST https://api.neuraldraft.io/v1/webhook-endpoints \
+  -H "Authorization: Bearer $NEURAL_DRAFT_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "url": "https://example.com/api/neural-draft",
+    "events": ["booking.confirmed", "booking.cancelled", "booking.completed"]
+  }'
+```
+
+Use these to fire SMS reminders, sync to your CRM, or post to a Slack channel.
+
+## Reference
+
+| Endpoint                                                  | Tag                                      |
+| --------------------------------------------------------- | ---------------------------------------- |
+| `GET /v1/services`                                        | [Booking](/api-reference#tag/Booking)    |
+| `POST /v1/services`                                       | [Booking](/api-reference#tag/Booking)    |
+| `GET /v1/services/{id}/availability`                      | [Booking](/api-reference#tag/Booking)    |
+| `PUT /v1/services/{id}/availability`                      | [Booking](/api-reference#tag/Booking)    |
+| `GET /v1/services/{id}/availability/dates`                | [Booking](/api-reference#tag/Booking)    |
+| `GET /v1/services/{id}/availability/slots`                | [Booking](/api-reference#tag/Booking)    |
+| `GET /v1/bookings`                                        | [Booking](/api-reference#tag/Booking)    |
+| `POST /v1/bookings/{id}/confirm`                          | [Booking](/api-reference#tag/Booking)    |
+| `POST /v1/bookings/{id}/cancel`                           | [Booking](/api-reference#tag/Booking)    |
+| `POST /v1/bookings/{id}/complete`                         | [Booking](/api-reference#tag/Booking)    |
+| `GET /v1/booking-settings`                                | [Booking](/api-reference#tag/Booking)    |
+| `POST /v1/services/{id}/calendar-feeds`                   | [Booking](/api-reference#tag/Booking)    |
+| `GET /v1/public/services`                                 | [Booking](/api-reference#tag/Booking)    |
+| `POST /v1/public/bookings`                                | [Booking](/api-reference#tag/Booking)    |

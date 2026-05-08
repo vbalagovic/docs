@@ -1,0 +1,184 @@
+---
+title: "Pricing & credits"
+description: "Pure usage-based pricing. One meter. Hard stop at zero. No surprise bills."
+---
+
+Neural Draft uses a **single-meter, pay-as-you-go** model. Every operation
+costs credits. You either subscribe to a tier (which buys credits at a discount
+plus a monthly allowance), top up ad-hoc, or stay free. There's no per-seat
+pricing, no per-tenant tax, no "Pro" gate. Every endpoint works at every tier;
+only the cost-per-credit differs.
+
+<Note>
+  **Hard stop at zero credits.** When your balance hits zero, every
+  credit-consuming operation returns
+  [`402 out_of_credits`](/errors#out-of-credits). Read-only endpoints continue
+  to work. No overage. No invoice surprises.
+</Note>
+
+## What every operation costs
+
+| Operation                                | Credits |
+| ---------------------------------------- | ------: |
+| Chat message                             |      15 |
+| Image generation                         |      40 |
+| Page edit (AI section update)            |      40 |
+| Translate (per target language)          |      70 |
+| Content plan creation                    |      80 |
+| Social post (per platform)               |      25 |
+| Blog post (full pipeline + translations) |     400 |
+| Website generation (full landing)        |   1,200 |
+| Storage (per GB-month)                   |      15 |
+| Connected social account (per acct-month) |    150 |
+| Stripe Connect account (per month)       |     250 |
+| Custom domain (per domain-month)         |     150 |
+| Outbound webhook delivery                |    0.02 |
+
+Read-only endpoints (`GET`) and lightweight writes (e.g. updating a draft,
+attaching a tag, scheduling a post) do not consume credits.
+
+A few examples to ground the numbers:
+
+- A blog post with 4 translations: 400 credits.
+- A cross-platform social post (FB + IG + TikTok): 75 credits.
+- A landing page with a hero image generated mid-session: 40 + 1,200 = 1,240
+  credits.
+- A storefront with a Stripe Connect account, 5 connected social platforms and
+  10 GB of media every month: 250 + 5 × 150 + 10 × 15 = 1,150 credits/month
+  before any AI ops.
+
+## Plans
+
+A plan doesn't unlock features — every operation is available at every tier.
+A plan buys credits at a discount with a monthly allowance.
+
+| Plan       | Credits / mo | Price | $/credit | Discount |
+| ---------- | -----------: | ----: | -------: | -------- |
+| **Free**       | 1,000        | $0    | —        | —        |
+| **Hobby**      | 5,000        | $25   | $0.005   | base     |
+| **Build**      | 25,000       | $119  | $0.00476 | 5% off   |
+| **Scale**      | 100,000      | $399  | $0.00399 | 20% off  |
+| **Enterprise** | custom       | custom | volume contract | up to 40% off |
+
+### Top-ups
+
+Top up anytime, on any tier (including Free), at the base rate of **$0.005 /
+credit**. No commitment, no expiry while the project is active.
+
+| Bundle | Credits |
+| ------ | ------: |
+| $20    |   4,000 |
+| $100   |  20,000 |
+| $500   | 100,000 |
+
+### Free tier
+
+1,000 credits/month covers, for example:
+
+- 66 chat messages, **or**
+- 2 blog posts + a few chats, **or**
+- 25 single-platform social posts, **or**
+- 1 image + 10 page edits + 20 chats.
+
+Tight enough that real product usage forces an upgrade — generous enough to
+build, test and demo a working integration end to end.
+
+## Tracking usage
+
+The dashboard shows a real-time credit ledger. The same data is on the API:
+
+```bash
+curl https://api.neuraldraft.io/v1/projects/me/usage \
+  -H "Authorization: Bearer $NEURAL_DRAFT_API_KEY"
+```
+
+```json
+{
+  "period_start": "2026-04-01T00:00:00Z",
+  "period_end": "2026-05-01T00:00:00Z",
+  "plan": "build",
+  "credits_included": 25000,
+  "credits_used": 8421,
+  "credits_remaining": 16579,
+  "top_ups": 0,
+  "by_operation": {
+    "blog_post.generate": 5200,
+    "image.generate": 1840,
+    "social_post.generate": 1100,
+    "translation.batch": 281
+  }
+}
+```
+
+A few patterns we've seen work well:
+
+- **Soft alerts**: subscribe to the `project.credits_low` webhook event and
+  Slack the team at 20% remaining.
+- **Per-customer cost tracking**: tag your own end-customers in
+  `metadata.customer_id` on async jobs; the dashboard exports a CSV grouped by
+  metadata.
+- **Hard ceilings per environment**: production keys have full scopes; preview
+  keys have `content:*` only and live on a separate top-up budget.
+
+## How pricing changes
+
+We re-evaluate credit costs roughly every 90 days against current upstream
+model prices (OpenAI, Anthropic, image and video providers). When upstream
+list prices drop materially, your credit costs drop too. When they rise,
+we may need to bump credit costs — always with **at least 30 days' notice
+before any change takes effect**, communicated by email and on the
+[changelog](/changelog).
+
+Predictable, in plain words:
+
+- Per-credit pricing only changes for two reasons: upstream list-price moves,
+  or a major capability shift (e.g. a new model tier). It does not change for
+  internal targets.
+- Increases are pre-announced with 30+ days' notice. You always have time to
+  budget or move.
+
+## FAQ
+
+<AccordionGroup>
+  <Accordion title="What if I run out mid-job?">
+    Async jobs (blog generation, batch translation, etc.) reserve credits when
+    queued. If your balance is too low at queue time, the request returns
+    `402 out_of_credits` immediately — nothing is started. Reserved credits are
+    refunded if the job fails for our reasons (e.g. upstream timeout).
+  </Accordion>
+
+  <Accordion title="Can I get a refund?">
+    Unused subscription credits don't roll over or refund — that's how the
+    discount is funded. Top-up credits are refundable for 30 days at our
+    discretion if your project is in good standing and you haven't used >25% of
+    the bundle. Email
+    [billing@neuraldraft.io](mailto:billing@neuraldraft.io).
+  </Accordion>
+
+  <Accordion title="Do retries cost extra?">
+    Failed AI generations that we retry server-side don't cost extra — you pay
+    once per successful or definitively-failed job. Webhook deliveries that
+    retry due to your endpoint returning non-2xx are billed per delivery
+    attempt (0.02 credits each); we cap retries at 5 with exponential backoff.
+  </Accordion>
+
+  <Accordion title="Do I pay for read-only API calls?">
+    No. `GET` endpoints don't consume credits unless explicitly noted in the
+    [API reference](/api-reference) for that endpoint (very few do).
+    Rate limits still apply — see [rate-limits](/rate-limits).
+  </Accordion>
+
+  <Accordion title="What about agency / reseller pricing?">
+    Agencies managing multiple projects get a master billing account — every
+    project rolls up into a single invoice with project-level breakdowns. Email
+    [sales@neuraldraft.io](mailto:sales@neuraldraft.io) for volume terms.
+  </Accordion>
+
+  <Accordion title="When am I billed?">
+    Subscriptions: monthly, on the day-of-month you signed up. Top-ups: on
+    purchase. Storage and recurring line items (connected accounts, custom
+    domains): metered hourly, billed at month-end against the included
+    allowance, then top-ups, then card-on-file (only if you've opted into
+    auto-recharge).
+  </Accordion>
+</AccordionGroup>

@@ -1,0 +1,189 @@
+---
+title: "Quickstart"
+description: "Get a working Neural Draft integration — key, SDK, first API call — in under five minutes."
+---
+
+You'll go from zero to a real, server-acknowledged blog post in five steps. The
+last step is optional but unlocks the part our customers love most: AI codegen
+tools that generate Neural Draft-native code without you teaching them.
+
+<Steps>
+  <Step title="Create a project">
+    Sign up at [app.neuraldraft.io/register](https://app.neuraldraft.io/register).
+    The form takes ~90 seconds and asks for the bare minimum: project name,
+    industry, brand voice, brand colors, target languages, and target audience.
+    These six fields populate your **brand context** — the canonical resource
+    every AI tool reads before it generates anything.
+
+    <Tip>
+      Already have a project? Skip ahead to step 2.
+    </Tip>
+  </Step>
+
+  <Step title="Get your API key">
+    From the dashboard, open **Settings → API keys → Create key**. Pick a name
+    (e.g. `dev-laptop`) and the scopes you need.
+
+    Your key looks like this:
+
+    ```
+    ndsk_live_2NgcaXxFqLPo7K3vR8zHwT5sE9bM1nDc
+    ```
+
+    The prefix tells you the environment: `ndsk_live_` is production,
+    `ndsk_test_` is the sandbox. Keys are shown **once** — copy them straight
+    into your secret manager.
+
+    <Warning>
+      Never commit a key to git. Use environment variables, a secret manager,
+      or your platform's encrypted env (Vercel, Fly, Render). Compromised keys
+      can be rotated from the dashboard at any time.
+    </Warning>
+
+    Now export it for the rest of this guide:
+
+    ```bash
+    export NEURAL_DRAFT_API_KEY=ndsk_live_2NgcaXxFqLPo7K3vR8zHwT5sE9bM1nDc
+    ```
+  </Step>
+
+  <Step title="Pick your client">
+    Every endpoint is a plain HTTP call — `fetch`, `axios`, `requests`, `cURL`,
+    Postman, anything. There's no required SDK.
+
+    <Tip>
+      An official `@neuraldraft/sdk` (TypeScript), `neuraldraft` (Python) and
+      `neuraldraft/sdk` (PHP) are on the roadmap. Until they land, the snippets
+      below use built-in `fetch` — copy/paste straight into your codebase.
+    </Tip>
+  </Step>
+
+  <Step title="Make your first call">
+    A round trip: verify the key, then create a draft blog post.
+
+    <CodeGroup>
+
+    ```bash cURL
+    # Verify the key
+    curl https://api.neuraldraft.io/v1/projects/me \
+      -H "Authorization: Bearer $NEURAL_DRAFT_API_KEY"
+
+    # Create a draft blog post
+    curl https://api.neuraldraft.io/v1/blog-posts \
+      -H "Authorization: Bearer $NEURAL_DRAFT_API_KEY" \
+      -H "Content-Type: application/json" \
+      -d '{
+        "title": "Five things we shipped this week",
+        "content": "<p>It was a busy week.</p>",
+        "language_code": "en",
+        "status": "draft"
+      }'
+    ```
+
+    ```ts Node (fetch)
+    const apiKey = process.env.NEURAL_DRAFT_API_KEY!;
+    const base = "https://api.neuraldraft.io/v1";
+    const headers = {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    };
+
+    // Verify the key
+    const me = await fetch(`${base}/projects/me`, { headers }).then(r => r.json());
+    console.log(`Hello, ${me.data.name}`);
+
+    // Create a draft blog post
+    const draft = await fetch(`${base}/blog-posts`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        title: "Five things we shipped this week",
+        content: "<p>It was a busy week.</p>",
+        language_code: "en",
+        status: "draft",
+      }),
+    }).then(r => r.json());
+
+    console.log(`Draft created: /blog/${draft.data.slug}`);
+    ```
+
+    </CodeGroup>
+
+    Expected response:
+
+    ```json
+    {
+      "id": 4711,
+      "slug": "five-things-we-shipped-this-week",
+      "status": "draft",
+      "title": "Five things we shipped this week",
+      "language_code": "en",
+      "category": null,
+      "tags": [],
+      "featured_image": null,
+      "published_at": null,
+      "scheduled_at": null,
+      "created_at": "2026-04-19T10:14:22Z",
+      "updated_at": "2026-04-19T10:14:22Z"
+    }
+    ```
+
+    Open `app.neuraldraft.io` and your draft is already there, ready to edit
+    or publish. **You're done with the API quickstart.**
+  </Step>
+
+  <Step title="Optional — install the MCP server">
+    This is the part that unlocks the magic: your editor's AI starts generating
+    Neural Draft-native code automatically.
+
+    Add the MCP server to Claude Code in one command:
+
+    ```bash
+    claude mcp add neural-draft --env NEURAL_DRAFT_API_KEY=$NEURAL_DRAFT_API_KEY -- npx -y @neuraldraft/mcp
+    ```
+
+    Or paste the snippet into `.cursor/mcp.json` for Cursor:
+
+    ```json
+    {
+      "mcpServers": {
+        "neural-draft": {
+          "command": "npx",
+          "args": ["-y", "@neuraldraft/mcp"],
+          "env": { "NEURAL_DRAFT_API_KEY": "ndsk_live_..." }
+        }
+      }
+    }
+    ```
+
+    Restart your editor. Now ask the AI:
+
+    > _"Generate a hero section for this site and register it with Neural Draft."_
+
+    Watch it read `brand://current` for your colors and voice, generate the
+    HTML with `data-translate` keys baked in, and call `register_component` so
+    the section appears in your admin as editable. No glue code.
+
+    Full setup (Claude Code, Cursor, Continue, plus the Lovable / v0 / Bolt
+    workaround) is on the [MCP setup](/mcp/setup) page.
+  </Step>
+</Steps>
+
+## What's next
+
+<CardGroup cols={2}>
+  <Card title="Authentication" icon="key" href="/authentication">
+    Scopes, rotation, environment separation, and the full list of
+    `401`/`403` failure modes.
+  </Card>
+  <Card title="Pricing & credits" icon="credit-card" href="/pricing-and-credits">
+    What every operation costs and what happens when you hit zero.
+  </Card>
+  <Card title="The five pillars" icon="layer-group" href="/pillars/cms">
+    CMS, blog, social, booking, commerce — what each one gives you and the
+    workflows we see most often.
+  </Card>
+  <Card title="Webhooks" icon="webhook" href="/webhooks">
+    Skip polling. Get an HTTP POST every time something changes.
+  </Card>
+</CardGroup>
