@@ -5689,8 +5689,8 @@ paths:
                   data:
                     $ref: "#/components/schemas/NewsletterSubscription"
         "403": { $ref: "#/components/responses/Forbidden" }
-        "422": { $ref: "#/components/responses/ValidationError" }
-        "429": { $ref: "#/components/responses/RateLimited" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
   /newsletters:
     get:
       tags: [Forms]
@@ -5763,8 +5763,8 @@ paths:
               required: [email]
               properties:
                 email: { type: string, format: email, maxLength: 255 }
-                subject: { type: string, maxLength: 500, nullable: true }
-                message: { type: string, maxLength: 10000, nullable: true }
+                subject: { type: [string, "null"], maxLength: 500 }
+                message: { type: [string, "null"], maxLength: 10000 }
                 data:
                   type: object
                   additionalProperties: true
@@ -5780,8 +5780,8 @@ paths:
                   data:
                     $ref: "#/components/schemas/ContactFormSubmission"
         "403": { $ref: "#/components/responses/Forbidden" }
-        "422": { $ref: "#/components/responses/ValidationError" }
-        "429": { $ref: "#/components/responses/RateLimited" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
     get:
       tags: [Forms]
       summary: List contact-form submissions
@@ -7081,30 +7081,27 @@ components:
           enum: [subscribed, already_subscribed]
           description: Only present on the public submit endpoint.
         subscribed_at:
-          type: string
+          type: [string, "null"]
           format: date-time
-          nullable: true
     ContactFormSubmission:
       type: object
       required: [id, email]
       properties:
         id: { type: integer, example: 17 }
         email: { type: string, format: email, example: "jane@example.com" }
-        subject: { type: string, nullable: true, example: "Demo request" }
-        message: { type: string, nullable: true }
+        subject: { type: [string, "null"], example: "Demo request" }
+        message: { type: [string, "null"] }
         data:
-          type: object
+          type: [object, "null"]
           additionalProperties: true
-          nullable: true
           description: Free-form payload, plus server-merged `ip`, `user_agent`, `submitted_at`.
         status:
           type: string
           enum: [received]
           description: Only present on the public submit endpoint.
         submitted_at:
-          type: string
+          type: [string, "null"]
           format: date-time
-          nullable: true
   responses:
     BadRequest:
       description: Malformed request — missing required field, invalid JSON, etc.
