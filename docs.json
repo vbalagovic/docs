@@ -93,12 +93,12 @@
           {
             "group": "Snippets",
             "pages": [
-              "snippets/nextjs",
-              "snippets/astro",
-              "snippets/nuxt",
-              "snippets/vanilla",
-              "snippets/lovable",
-              "snippets/cursor"
+              "frameworks/nextjs",
+              "frameworks/astro",
+              "frameworks/nuxt",
+              "frameworks/vanilla",
+              "frameworks/lovable",
+              "frameworks/cursor"
             ]
           }
         ]
@@ -177,6 +177,6 @@
   "redirects": [
     { "source": "/api", "destination": "/api-reference" },
     { "source": "/docs", "destination": "/" },
-    { "source": "/sdk", "destination": "/snippets/nextjs" }
+    { "source": "/sdk", "destination": "/frameworks/nextjs" }
   ]
 }
