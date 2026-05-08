@@ -18,34 +18,41 @@ only the cost-per-credit differs.
 
 ## What every operation costs
 
-| Operation                                | Credits |
-| ---------------------------------------- | ------: |
-| Chat message                             |      15 |
-| Image generation                         |      40 |
-| Page edit (AI section update)            |      40 |
-| Translate (per target language)          |      70 |
-| Content plan creation                    |      80 |
-| Social post (per platform)               |      25 |
-| Blog post (full pipeline + translations) |     400 |
-| Website generation (full landing)        |   1,200 |
-| Storage (per GB-month)                   |      15 |
-| Connected social account (per acct-month) |    150 |
-| Stripe Connect account (per month)       |     250 |
-| Custom domain (per domain-month)         |     150 |
-| Outbound webhook delivery                |    0.02 |
+| Operation                                          | Credits |
+| -------------------------------------------------- | ------: |
+| Chat message                                       |       1 |
+| Page edit (inline AI tweak)                        |       2 |
+| Content plan creation                              |       3 |
+| Translate (per target language)                    |       5 |
+| Social post — text only                            |       5 |
+| Social post — text + image                         |   5 + 8 |
+| Social post — text + video                         | 5 + 100 |
+| Image generation                                   |       8 |
+| Blog post (research + draft + featured image)      |      20 |
+| Video clip — premium (Kling v2.1 / Runway Gen4)    |     100 |
+| Website generation (full landing, multi-section)   |     120 |
 
 Read-only endpoints (`GET`) and lightweight writes (e.g. updating a draft,
-attaching a tag, scheduling a post) do not consume credits.
+attaching a tag, scheduling a post, registering a component, creating a page,
+upserting a content key) do not consume credits.
+
+<Note>
+  **Social post media surcharge.** `POST /v1/social-posts` with `type=ai`
+  always charges the 5-credit text base; if `media_type=image` or
+  `media_type=video` is also set, an extra `image` (8) or `video` (100)
+  charge is recorded against the same job, so the total reflects what was
+  actually generated.
+</Note>
 
 A few examples to ground the numbers:
 
-- A blog post with 4 translations: 400 credits.
-- A cross-platform social post (FB + IG + TikTok): 75 credits.
-- A landing page with a hero image generated mid-session: 40 + 1,200 = 1,240
+- A blog post with 4 translations: 20 + 4 × 5 = 40 credits.
+- A cross-platform social post with one image (single API call, posts to FB +
+  IG + TikTok): 5 + 8 = 13 credits.
+- A landing page with a hero image generated mid-session: 8 + 120 = 128
   credits.
-- A storefront with a Stripe Connect account, 5 connected social platforms and
-  10 GB of media every month: 250 + 5 × 150 + 10 × 15 = 1,150 credits/month
-  before any AI ops.
+- A short product reel via `POST /v1/videos` or `media_type=video` social:
+  100 credits per clip.
 
 ## Plans
 
@@ -76,11 +83,16 @@ credit**. No commitment, no expiry while the project is active.
 Every project starts with **1,000 credits per month, no card required**.
 That's enough to build, test and demo a working integration end to end.
 Mix-and-match examples of what 1,000 credits buys:
+- ~1,000 chat messages, **or**
+- 50 blog posts (or 30 with translations), **or**
+- ~200 text-only social posts, **or**
+- 100+ images, **or**
+- 10 premium video clips, **or**
+- 8 full website generations.
 
-- ~66 chat messages, **or**
-- 2 blog posts plus a few chats, **or**
-- ~25 single-platform social posts, **or**
-- 1 image plus 10 page edits plus 20 chats.
+Free-tier projects also surface a small "Built with Neural Draft" badge in
+embedded widgets and on platform-rendered pages — turning that off requires a
+paid tier.
 
 Hit zero and the API returns `402 out_of_credits` until next month — no
 surprise bills. Top up with a one-time pack or upgrade to a paid tier

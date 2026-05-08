@@ -69,6 +69,7 @@
               "errors",
               "rate-limits",
               "webhooks",
+              "guides/stripe-connect-setup",
               "migration-from-saas"
             ]
           },
@@ -115,13 +116,13 @@
     "global": {
       "anchors": [
         {
-          "anchor": "MCP server",
-          "href": "https://github.com/neuraldraft/mcp",
+          "anchor": "SDK",
+          "href": "https://github.com/vbalagovic/neuraldraft-sdk",
           "icon": "github"
         },
         {
-          "anchor": "Community",
-          "href": "https://neuraldraft.io/community",
+          "anchor": "Discord",
+          "href": "https://discord.gg/XCQftzvBQX",
           "icon": "discord"
         }
       ]
@@ -129,7 +130,8 @@
   },
   "footer": {
     "socials": {
-      "github": "https://github.com/neuraldraft",
+      "github": "https://github.com/vbalagovic/neuraldraft-sdk",
+      "discord": "https://discord.gg/XCQftzvBQX",
       "x": "https://x.com/neuraldraft"
     },
     "links": [
@@ -144,9 +146,17 @@
       {
         "header": "Resources",
         "items": [
-          { "label": "MCP server", "href": "https://github.com/neuraldraft/mcp" },
+          { "label": "SDK on GitHub", "href": "https://github.com/vbalagovic/neuraldraft-sdk" },
+          { "label": "MCP on npm", "href": "https://www.npmjs.com/package/@neuraldraft/mcp" },
           { "label": "API reference", "href": "/api-reference" },
           { "label": "Quickstart", "href": "/quickstart" }
+        ]
+      },
+      {
+        "header": "Community",
+        "items": [
+          { "label": "Discord", "href": "https://discord.gg/XCQftzvBQX" },
+          { "label": "GitHub issues", "href": "https://github.com/vbalagovic/neuraldraft-sdk/issues" }
         ]
       },
       {

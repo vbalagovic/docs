@@ -1435,6 +1435,202 @@ paths:
             $client->delete("components/{$id}", [
               'headers' => ['Authorization' => 'Bearer '.$key],
             ]);
+  /pages:
+    get:
+      tags: [Pages]
+      summary: List pages
+      description: |
+        Paginated list of `TenantPage` rows. Filter by `type` (landing,
+        blog_list, blog_post, legal) or `is_active`. Pages are ordered with
+        the homepage first, then alphabetically by slug.
+      operationId: listPages
+      security:
+        - apiKey: [pages:read]
+      parameters:
+        - in: query
+          name: type
+          schema: { type: string, enum: [landing, blog_list, blog_post, legal] }
+        - in: query
+          name: is_active
+          schema: { type: boolean }
+        - in: query
+          name: page
+          schema: { type: integer, minimum: 1, default: 1 }
+        - in: query
+          name: page_size
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Page' }
+                  meta:
+                    type: object
+                    properties:
+                      page: { type: integer }
+                      page_size: { type: integer }
+                      total: { type: integer }
+                      last_page: { type: integer }
+    post:
+      tags: [Pages]
+      summary: Create a page
+      description: |
+        Create a `TenantPage` with optional SEO meta. Promoting a page to
+        homepage demotes any previously-homepage page.
+
+        **Free** — does not consume credits.
+      operationId: createPage
+      security:
+        - apiKey: [pages:write]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PageCreateInput' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/Page' }
+        '409':
+          description: A page with that slug already exists.
+  /pages/{id_or_slug}:
+    get:
+      tags: [Pages]
+      summary: Fetch a page by id or slug
+      operationId: getPage
+      security:
+        - apiKey: [pages:read]
+      parameters:
+        - in: path
+          name: id_or_slug
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/Page' }
+        '404':
+          description: Not found.
+    patch:
+      tags: [Pages]
+      summary: Update a page (merge semantics on meta)
+      description: |
+        Only fields you pass are overwritten — meta keys you omit are
+        preserved. Pass an explicit `null` to clear a meta field. Path
+        parameter must be the numeric id (not slug) for this endpoint.
+      operationId: updatePage
+      security:
+        - apiKey: [pages:write]
+      parameters:
+        - in: path
+          name: id_or_slug
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PageUpdateInput' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/Page' }
+    delete:
+      tags: [Pages]
+      summary: Soft-retire (default) or hard-delete (force=1) a page
+      description: |
+        By default sets `is_active=false`. Pass `?force=1` to hard delete.
+        Refuses to delete the homepage.
+      operationId: deletePage
+      security:
+        - apiKey: [pages:write]
+      parameters:
+        - in: path
+          name: id_or_slug
+          required: true
+          schema: { type: integer }
+        - in: query
+          name: force
+          schema: { type: boolean, default: false }
+      responses:
+        '204': { description: No content }
+        '422': { description: Cannot delete the homepage. }
+  /videos:
+    post:
+      tags: [Videos]
+      summary: Generate a premium video clip
+      description: |
+        Kicks off a premium short-form video generation (Kling v2.1 /
+        Runway Gen4). Charges **100 credits** per call. Returns a
+        [`Job`](#tag/Jobs) with `type: video.generate`; poll
+        `GET /jobs/{id}` for completion.
+      operationId: generateVideo
+      security:
+        - apiKey: [videos:write]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [prompt]
+              properties:
+                prompt:
+                  type: string
+                  minLength: 3
+                  maxLength: 2000
+                  description: |
+                    What the video should show. Use visual / cinematic
+                    language: action verbs, camera movement, mood.
+                aspect_ratio:
+                  type: string
+                  enum: ['1:1', '16:9', '9:16', '4:3', '3:4', '3:2', '2:3']
+                  default: '9:16'
+                duration_seconds:
+                  type: integer
+                  minimum: 3
+                  maximum: 30
+                  default: 5
+                visual_style:
+                  type: string
+                  maxLength: 200
+                platforms:
+                  type: array
+                  items:
+                    type: string
+                    enum: [facebook, instagram, twitter, tiktok, linkedin]
+      responses:
+        '202':
+          description: Job queued.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/Job' }
+        '402':
+          description: Insufficient credits.
   /images:
     post:
       tags: [Images]
@@ -5723,6 +5919,70 @@ components:
           example: en
           description: BCP-47 language tag. Defaults to project default.
         value: { type: string, example: Welcome to Lakeside Yoga }
+    Page:
+      type: object
+      required: [id, slug, title, type, is_homepage, is_active]
+      properties:
+        id: { type: integer, example: 42 }
+        slug: { type: string, example: about }
+        title: { type: string, example: About us }
+        type:
+          type: string
+          enum: [landing, blog_list, blog_post, legal]
+          default: landing
+        is_homepage: { type: boolean, example: false }
+        is_active: { type: boolean, example: true }
+        exclude_from_search: { type: boolean, example: false }
+        meta_title: { type: [string, "null"], example: "About — Acme" }
+        meta_description: { type: [string, "null"] }
+        og_title: { type: [string, "null"] }
+        og_description: { type: [string, "null"] }
+        og_image: { type: [string, "null"], format: uri }
+        canonical_url: { type: [string, "null"], format: uri }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    PageCreateInput:
+      type: object
+      required: [slug, title]
+      properties:
+        slug:
+          type: string
+          pattern: '^[a-z0-9\-/]+$'
+          example: about
+        title: { type: string, example: About us }
+        type:
+          type: string
+          enum: [landing, blog_list, blog_post, legal]
+          default: landing
+        is_homepage: { type: boolean, default: false }
+        is_active: { type: boolean, default: true }
+        exclude_from_search: { type: boolean, default: false }
+        meta_title: { type: string }
+        meta_description: { type: string }
+        og_title: { type: string }
+        og_description: { type: string }
+        og_image: { type: string, format: uri }
+        canonical_url: { type: string, format: uri }
+    PageUpdateInput:
+      type: object
+      description: |
+        Patch shape — every field is optional. Pass `null` on a meta field
+        to clear it. Untouched fields are preserved (merge semantics).
+      properties:
+        slug: { type: string, pattern: '^[a-z0-9\-/]+$' }
+        title: { type: string }
+        type:
+          type: string
+          enum: [landing, blog_list, blog_post, legal]
+        is_homepage: { type: boolean }
+        is_active: { type: boolean }
+        exclude_from_search: { type: boolean }
+        meta_title: { type: [string, "null"] }
+        meta_description: { type: [string, "null"] }
+        og_title: { type: [string, "null"] }
+        og_description: { type: [string, "null"] }
+        og_image: { type: [string, "null"], format: uri }
+        canonical_url: { type: [string, "null"], format: uri }
     Component:
       type: object
       required: [id, html, created_at, updated_at]

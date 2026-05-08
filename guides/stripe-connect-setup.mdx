@@ -1,0 +1,154 @@
+---
+title: "Stripe Connect setup"
+description: "Let your project accept payments under its own brand — Neural Draft handles the platform plumbing."
+---
+
+Stripe Connect lets each Neural Draft project accept payments to its **own**
+Stripe account — payouts land directly in the project owner's bank, your
+brand stays on the receipts. Neural Draft acts as the Connect platform and
+takes a small **5% application fee** on each transaction by default
+(configurable on your platform).
+
+## What you get out of the box
+
+- One-click Express onboarding from the project admin (or via API).
+- Automatic `account.updated` webhook handling — `charges_enabled` and
+  `payouts_enabled` flags stay in sync.
+- Direct charges with platform fees — your customers pay the project's
+  Stripe account; Neural Draft's cut transfers automatically.
+- Refund flow that re-credits both the customer and reverses the
+  application fee proportionally.
+- A "Login to Stripe Dashboard" link your project owners can use to view
+  their balance / payouts without leaving Neural Draft.
+
+## One-time platform setup
+
+You only do this once, on the platform's Stripe account.
+
+<Steps>
+  <Step title="Enable Connect">
+    In the Stripe Dashboard, go to
+    [Connect → Settings](https://dashboard.stripe.com/settings/connect)
+    and enable Express accounts. Set your platform name, branding and
+    support email — these appear on connected accounts' onboarding flow.
+  </Step>
+
+  <Step title="Set the application fee policy">
+    Decide whether you want Neural Draft to take a percentage of each
+    transaction. The platform default is **5%** — change it via the
+    `STRIPE_CONNECT_APPLICATION_FEE_PERCENT` env var (or set to `0` to
+    disable the cut entirely).
+
+    ```env
+    STRIPE_CONNECT_APPLICATION_FEE_PERCENT=5
+    ```
+  </Step>
+
+  <Step title="Register the Connect webhook">
+    In the Stripe Dashboard:
+    [Webhooks → Add endpoint](https://dashboard.stripe.com/webhooks/create).
+
+    - **Endpoint URL**: `https://api.neuraldraft.io/webhooks/stripe-connect`
+    - **Listen to**: events on `Connected accounts` (not "Your account")
+    - **Events**: `account.updated`, `account.application.deauthorized`,
+      `payout.paid`, `payout.failed`
+
+    Copy the signing secret and paste it into your env:
+
+    ```env
+    STRIPE_CONNECT_WEBHOOK_SECRET=whsec_…
+    ```
+  </Step>
+
+  <Step title="(Optional) brand the OAuth redirect">
+    For OAuth-style Connect (rare — Express covers most use cases),
+    set:
+
+    ```env
+    STRIPE_CONNECT_REDIRECT_URL=https://app.neuraldraft.io/admin/connect/callback
+    STRIPE_CONNECT_REFRESH_URL=https://app.neuraldraft.io/admin/connect/refresh
+    ```
+  </Step>
+</Steps>
+
+## Per-project flow
+
+Once the platform is set up, each Neural Draft project goes through the
+same onboarding regardless of admin (Vue SPA, Cursor, Claude Code, your
+custom UI):
+
+```http
+POST /v1/connect/onboarding
+{
+  "return_url":  "https://yoursite.com/admin/connect/done",
+  "refresh_url": "https://yoursite.com/admin/connect/start"
+}
+```
+
+The response includes a one-time `url` you redirect the project owner to.
+Stripe walks them through identity verification, bank details, and tax
+forms. When they land on `return_url`, the account is provisioned —
+`POST /v1/connect/refresh` confirms readiness.
+
+```http
+GET /v1/connect/status
+{
+  "data": {
+    "connected": true,
+    "onboarding_complete": true,
+    "charges_enabled": true,
+    "payouts_enabled": true,
+    "country": "GB",
+    "default_currency": "gbp",
+    "connected_at": "2026-05-08T13:42:11Z"
+  }
+}
+```
+
+## How charges work
+
+Once a project is connected, **every product order or paid booking is
+automatically routed through Connect** — there is no separate setup. The
+platform calls Stripe with:
+
+- `stripe_account: <connected account id>` — direct charge
+- `payment_intent_data.application_fee_amount: <5% of total>` — the
+  platform's cut, computed on the order subtotal.
+
+If `STRIPE_CONNECT_APPLICATION_FEE_PERCENT=0`, no fee is taken — the
+project keeps 100%.
+
+## Disconnect
+
+Call `POST /v1/connect/disconnect` to deauthorize the connected account
+and clear all `stripe_connect_*` fields on the project. Future payment
+attempts will then go to the platform's main Stripe account (or fail,
+depending on how your products page is configured).
+
+## Local development
+
+For testing, point Stripe CLI at the connect webhook:
+
+```bash
+stripe listen --forward-connect-to localhost:8000/webhooks/stripe-connect
+```
+
+Use the Stripe-issued signing secret as `STRIPE_CONNECT_WEBHOOK_SECRET`
+in `.env`. Create a test connected account via:
+
+```bash
+stripe accounts create --type=express \
+  --capabilities[card_payments][requested]=true \
+  --capabilities[transfers][requested]=true
+```
+
+…then plug the resulting `acct_…` id into the project's
+`stripe_connect_account_id` field for local-only flow testing.
+
+## Troubleshooting
+
+| Symptom | Likely cause |
+| --- | --- |
+| `400 invalid_request_error: Application fee amount cannot be greater than the charge total` | Your `STRIPE_CONNECT_APPLICATION_FEE_PERCENT` is set above 100, or the order total is rounded down to 0. |
+| Webhooks arrive but tenant fields don't update | `STRIPE_CONNECT_WEBHOOK_SECRET` is missing or stale — webhook signature fails. |
+| Onboarding link 404s on Stripe | Account has been deauthorized; call `POST /v1/connect/onboarding` again to create a fresh one. |

@@ -237,6 +237,70 @@ Returns the embed snippet for a service. The AI inserts it into the page.
 }
 ```
 
+### `create_bookable_service`
+
+Create a service customers can book. Two modes — both share the same tool;
+pick `booking_type` to switch:
+
+- `time_slot` (default) — meeting / appointment style with `duration_minutes`,
+  `buffer_before_minutes`, `buffer_after_minutes`, `max_bookings_per_slot`.
+- `date_range` — apartment / rental style with `min_nights`, `max_nights`.
+
+```json
+{
+  "name": "create_bookable_service",
+  "input": {
+    "name": "Cozy beach apartment",
+    "booking_type": "date_range",
+    "price": 15000,
+    "currency": "eur",
+    "min_nights": 2,
+    "max_nights": 14
+  }
+}
+```
+
+After creation, call `setup_booking_widget` with the returned `service_id`.
+
+### Pages — `create_page` / `list_pages` / `get_page` / `update_page`
+
+Multi-page authoring with per-page SEO meta. Call `create_page` once per
+page **before** registering its components if you want a real
+`meta_title` / `meta_description`. If you skip it, `register_component`
+auto-creates a stub page that you can backfill via `update_page`.
+
+```json
+{
+  "name": "create_page",
+  "input": {
+    "slug": "about",
+    "title": "About us",
+    "meta_title": "About — Acme",
+    "meta_description": "Built for makers who hate boilerplate.",
+    "og_image": "https://cdn.example.com/og.png"
+  }
+}
+```
+
+`update_page` uses **merge semantics** — only the fields you pass are
+overwritten, the rest are preserved. Pass `null` to clear a meta field.
+
+### `generate_video`
+
+Premium short-form clip (Kling v2.1 / Runway Gen4). Returns a Job; poll
+`get_job` until complete. Charges 100 credits per call.
+
+```json
+{
+  "name": "generate_video",
+  "input": {
+    "prompt": "slow-mo pour-over coffee, warm morning light, cinematic",
+    "aspect_ratio": "9:16",
+    "duration_seconds": 5
+  }
+}
+```
+
 ## Prompts (slash commands)
 
 Prompts are user-invoked. They expand into a long instruction the AI then
@@ -306,5 +370,8 @@ session.
 
 ## Source
 
-The full MCP server is open source: [github.com/neuraldraft/mcp](https://github.com/neuraldraft/mcp).
-File issues there. We follow SemVer; non-breaking additions are normal.
+The MCP server ships as the [`@neuraldraft/mcp`](https://www.npmjs.com/package/@neuraldraft/mcp)
+npm package. File issues against the
+[SDK repo](https://github.com/vbalagovic/neuraldraft-sdk/issues) for now —
+they share the same maintainer, and most MCP bugs trace back to client-shape
+mismatches. We follow SemVer; non-breaking additions are normal.
