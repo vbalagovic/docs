@@ -1,0 +1,183 @@
+---
+title: "Migration from SaaS"
+description: "How existing tenants move onto the API-first model. Nothing forced — both paths coexist."
+---
+
+If you signed up for Neural Draft when it was a SaaS website builder, **none
+of your data has changed and nothing has broken.** The old admin works. Your
+existing site renders. Your scheduled blog posts and social posts continue.
+Your bookings and orders run as before.
+
+What changed is what's _possible_ next: every tenant now has an API key, an
+MCP setup page, and a clean v1 contract over the same data. You can use it,
+ignore it, or run both side by side indefinitely.
+
+## TL;DR
+
+- Old admin: still works.
+- Existing tenant subdomain (`*.neuraldraft.io`): still works.
+- Generated landing page: still rendered, no changes.
+- Blog, social, bookings, products: all available via the new v1 API.
+- API key: auto-issued; copy it from the dashboard.
+- MCP server: opt-in.
+
+The new path is **purely additive**. There's no deadline, no forced cutover,
+no pricing change for grandfathered tenants for at least 12 months.
+
+## What you should do
+
+<Steps>
+  <Step title="Grab your auto-issued API key">
+    Open the dashboard at [app.neuraldraft.io](https://app.neuraldraft.io).
+    A new tab — **API Access** — has been added to the sidebar. Your project
+    has one auto-issued key with full scopes; rename it (e.g. `migration-bootstrap`)
+    and copy it into your secret manager.
+
+    The first read in the dashboard reveals the key once; it's hashed afterwards.
+    Lost it? Mint a fresh one from the same screen.
+  </Step>
+
+  <Step title="Verify you can call the API">
+    A round-trip:
+
+    ```bash
+    curl https://api.neuraldraft.io/v1/projects/me \
+      -H "Authorization: Bearer ndsk_live_..."
+    ```
+
+    You should see your project name, plan, and current credit balance. If you
+    see `401 unauthorized`, double-check the key prefix — `ndsk_live_*` is
+    production, `ndsk_test_*` is the sandbox.
+  </Step>
+
+  <Step title="Try a low-risk read">
+    The safest first call is a list of your existing blog posts:
+
+    ```bash
+    curl "https://api.neuraldraft.io/v1/blog-posts?status=published&per_page=5" \
+      -H "Authorization: Bearer ndsk_live_..."
+    ```
+
+    The data is the same blog posts you've been managing in the admin —
+    nothing duplicated, nothing migrated.
+  </Step>
+
+  <Step title="Decide what to do with the existing site">
+    Three honest paths:
+
+    1. **Do nothing.** The Vue admin still publishes posts, schedules socials,
+       takes bookings, and serves your generated landing page. Use the API
+       only for integrations (e.g. webhook to Slack, a CRM sync).
+    2. **Layer a custom frontend.** Build a Next.js / Astro / Nuxt site that
+       reads from `/v1/*` and `/v1/public/*`, deploy it under your custom
+       domain, and keep the existing tenant subdomain as a fallback.
+    3. **Rebuild on AI codegen.** Open the **API Access → Build with AI** tab
+       — we'll seed Lovable / Cursor / Claude Code with your brand context
+       and a starter scaffold. Your new site fetches the same data; the
+       cutover is a DNS change.
+
+    All three work. We have customers on each. There's no right answer beyond
+    "what does your team have time for".
+  </Step>
+
+  <Step title="Optional: install the MCP server">
+    If you'll write any custom code, install
+    [`@neuraldraft/mcp`](/mcp/setup) in your editor. Once installed, your AI
+    sees your real brand context, your real schemas, and a `register_component`
+    tool that turns AI-generated HTML into editable admin sections — without
+    you wiring anything.
+
+    This is the part that pays for itself in a single afternoon.
+  </Step>
+</Steps>
+
+## What hasn't changed
+
+| Surface                                     | Status                                                    |
+| ------------------------------------------- | --------------------------------------------------------- |
+| Tenant Vue admin SPA                        | Unchanged. Same URL, same behaviour.                      |
+| Existing custom domains                     | Unchanged.                                                |
+| Existing tenant subdomains                  | Unchanged. New API-only projects don't get one.           |
+| Generated landing page (HTML in `tenant_pages`) | Still rendered exactly as before.                     |
+| Blog / social / bookings / products data    | Same database, same UI, same API.                         |
+| Stripe Connect onboarding state             | Preserved.                                                |
+| Connected social accounts                   | Preserved.                                                |
+| Pricing tier you're on today                | Grandfathered for 12 months minimum.                      |
+| Webhooks already configured                 | Still firing. New events are additive.                    |
+
+## What's new
+
+| Surface                                     | Status                                                            |
+| ------------------------------------------- | ----------------------------------------------------------------- |
+| `/v1/*` Project API                         | Live. Bearer-key auth, OpenAPI 3.1, rate-limited.                 |
+| `@neuraldraft/sdk` (TypeScript)             | Live on npm.                                                      |
+| `@neuraldraft/mcp` (MCP server)             | Live on npm; in the official MCP registry.                        |
+| Webhook events                              | Doubled. Full list on [webhooks](/webhooks).                      |
+| Public widget endpoints                     | Booking widget, buy button, cart drawer, product card.            |
+| Idempotency keys                            | Honoured on all mutating endpoints.                               |
+| Per-key scopes                              | Mint least-privilege keys for builders, schedulers, integrations. |
+| Credit-based usage pricing                  | Available alongside legacy SaaS tiers.                            |
+
+## FAQ
+
+<AccordionGroup>
+  <Accordion title="Will my data be migrated?">
+    No migration is needed. The v1 API reads the same tables your admin reads.
+    Your existing posts, social schedules, bookings, products, and orders are
+    available immediately at `/v1/*`.
+  </Accordion>
+
+  <Accordion title="Will my pricing change?">
+    Not unless you opt in. Existing SaaS-tier customers stay on their current
+    plan for at least 12 months from the API-first launch. You can switch to
+    usage-based credits at any time — the dashboard shows a live "what would I
+    pay" estimator based on your last 30 days of activity.
+  </Accordion>
+
+  <Accordion title="Can I use both pricing models?">
+    Yes — your monthly tier covers what it covered before; usage credits are a
+    separate line item that activates only if you start using API ops the old
+    plan didn't include (e.g. webhook deliveries, MCP tool calls, custom
+    domains beyond your old plan's count).
+  </Accordion>
+
+  <Accordion title="Will my old admin go away?">
+    Not for at least 12 months, and probably never — even our power-API
+    customers like having a UI for editorial work. The Vue SPA is now
+    "Neural Draft Studio" in our taxonomy: an officially supported management
+    UI, also reachable via the Admin API.
+  </Accordion>
+
+  <Accordion title="What if I want to leave?">
+    Export every entity at any time via `GET /v1/exports`. We hand back JSON
+    dumps of posts, products, bookings, orders, translations and brand
+    context. Stripe-connected revenue keeps flowing to your account; custom
+    domains can be moved off our DNS in a single CNAME flip.
+  </Accordion>
+
+  <Accordion title="What about the website-generator?">
+    The legacy "Generate website" feature is still in personal use; we've
+    capped new tenant access to it (the new onboarding path doesn't include
+    it) but existing tenants can keep using it indefinitely. We'll review on
+    the 12-month mark.
+  </Accordion>
+</AccordionGroup>
+
+## A pragmatic upgrade path
+
+For tenants who want to migrate to the API-first model without a big-bang
+rewrite, the order we recommend:
+
+1. **Week 1 — Observe.** Issue a read-only API key. Run a daily script that
+   pulls your blog post list, ensures counts match the admin. Confidence-
+   build.
+2. **Week 2 — Webhooks.** Subscribe `order.paid`, `blog_post.published`,
+   `booking.confirmed` to a Slack channel or your CRM. Replace any polling
+   you're doing.
+3. **Week 3 — One section.** Replace one editable section on your site with
+   a `data-translate` flow backed by `/v1/content/bulk`. Confirm it edits in
+   the admin.
+4. **Week 4+ — As needed.** Continue replacing sections, or rebuild whole
+   pages with Lovable/Cursor + the MCP server, on your own timeline.
+
+You're never under pressure. The legacy path stays warm.

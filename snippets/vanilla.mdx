@@ -1,0 +1,175 @@
+---
+title: "Vanilla HTML / fetch"
+description: "Plain HTML and fetch — no framework, no build step, no SDK."
+---
+
+For static HTML pages, single-file demos, or any environment without npm: this
+is the smallest possible Neural Draft integration.
+
+## Read public content
+
+The simplest pattern. A `data-translate` attribute and a tiny script:
+
+```html filename="index.html"
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Acme</title>
+  </head>
+  <body>
+    <h1 data-translate="hero.headline">…</h1>
+    <p data-translate="hero.subhead">…</p>
+
+    <script>
+      const PROJECT_ID = "prj_2NgcaXxFqLPo"; // your project id
+      const LANG = document.documentElement.lang || "en";
+
+      // Find every key on the page
+      const elements = Array.from(document.querySelectorAll("[data-translate]"));
+      const keys = [...new Set(elements.map((el) => el.dataset.translate))];
+
+      // One bulk fetch for the whole page
+      fetch(
+        `https://api.neuraldraft.io/v1/public/content/bulk?keys=${encodeURIComponent(keys.join(","))}&lang=${LANG}&project_id=${PROJECT_ID}`
+      )
+        .then((r) => r.json())
+        .then((data) => {
+          for (const el of elements) {
+            const key = el.dataset.translate;
+            if (data[key] != null) el.textContent = data[key];
+          }
+        });
+    </script>
+  </body>
+</html>
+```
+
+## Submit a public booking
+
+A booking form with a real Neural Draft submit and graceful error handling.
+
+```html
+<form id="book">
+  <input name="customer_name" required placeholder="Your name" />
+  <input name="customer_email" type="email" required placeholder="Email" />
+  <input name="starts_at" type="datetime-local" required />
+  <input type="hidden" name="service_id" value="12" />
+  <button type="submit">Book</button>
+  <p id="status" hidden></p>
+</form>
+
+<script>
+  const form = document.getElementById("book");
+  const status = document.getElementById("status");
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    status.hidden = true;
+
+    const fd = new FormData(form);
+    const body = Object.fromEntries(fd.entries());
+    body.starts_at = new Date(body.starts_at).toISOString();
+    body.service_id = Number(body.service_id);
+
+    try {
+      const res = await fetch("https://api.neuraldraft.io/v1/public/bookings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail ?? "Booking failed.");
+
+      status.textContent = `Booked. Reference: ${data.booking_reference}`;
+      status.hidden = false;
+      form.reset();
+    } catch (err) {
+      status.textContent = err.message ?? "Something went wrong.";
+      status.hidden = false;
+    }
+  });
+</script>
+```
+
+## A typed mini-client for the browser
+
+For pages that need more than a fetch or two, this 30-line wrapper gives you
+typed responses without a build step.
+
+```html
+<script type="module">
+  const API = "https://api.neuraldraft.io/v1";
+
+  async function call(path, init = {}) {
+    const headers = new Headers(init.headers);
+    headers.set("Content-Type", "application/json");
+    const res = await fetch(`${API}${path}`, { ...init, headers });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw Object.assign(
+        new Error(err.detail ?? res.statusText),
+        { status: res.status, code: err.code, requestId: err.instance }
+      );
+    }
+    return res.status === 204 ? null : await res.json();
+  }
+
+  // Public endpoints — no auth
+  export const nd = {
+    products: {
+      list: (projectId) => call(`/public/products?project_id=${projectId}`),
+      bySlug: (slug) => call(`/public/products/${encodeURIComponent(slug)}`),
+    },
+    services: {
+      list: (projectId) => call(`/public/services?project_id=${projectId}`),
+    },
+    checkoutSessions: {
+      create: (body) =>
+        call(`/checkout-sessions`, { method: "POST", body: JSON.stringify(body) }),
+    },
+  };
+</script>
+```
+
+## A server-side authed call (Node CLI / cron / one-off)
+
+When you need to use your API key — never from the browser — this is the
+shortest possible authed call:
+
+```js filename="post.mjs"
+const KEY = process.env.NEURAL_DRAFT_API_KEY;
+
+const res = await fetch("https://api.neuraldraft.io/v1/blog-posts", {
+  method: "POST",
+  headers: {
+    Authorization: `Bearer ${KEY}`,
+    "Content-Type": "application/json",
+  },
+  body: JSON.stringify({
+    title: "Hello, world",
+    content: "<p>The first post.</p>",
+    language_code: "en",
+    status: "draft",
+  }),
+});
+
+const post = await res.json();
+console.log(post.slug);
+```
+
+```bash
+NEURAL_DRAFT_API_KEY=ndsk_live_... node post.mjs
+```
+
+## Notes
+
+- Never put your `ndsk_live_*` key in HTML. Only the public endpoints under
+  `/v1/public/*` are safe to call from the browser; everything else MUST go
+  through your server.
+- Use `/v1/public/content/bulk` (no auth, project resolved by `project_id`)
+  for client-side reads. The authenticated `/v1/content/bulk` is for build-time
+  and server-side fetches.
+- Rate limits apply per-project to public endpoints too — see
+  [rate-limits](/rate-limits).

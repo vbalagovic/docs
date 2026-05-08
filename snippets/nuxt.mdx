@@ -1,0 +1,188 @@
+---
+title: "Nuxt"
+description: "A Nuxt 3 module + composable + webhook server route, ready to drop into any project."
+---
+
+This snippet wires Neural Draft into Nuxt 3 with two pieces: a typed
+composable for client and server use, and a webhook handler with HMAC
+verification.
+
+## Install
+
+```bash
+npm install @neuraldraft/sdk
+```
+
+```bash filename=".env"
+NEURAL_DRAFT_API_KEY=ndsk_live_...
+NEURAL_DRAFT_WEBHOOK_SECRET=whsec_...
+```
+
+## Runtime config
+
+```ts filename="nuxt.config.ts"
+export default defineNuxtConfig({
+  runtimeConfig: {
+    neuralDraftApiKey: process.env.NEURAL_DRAFT_API_KEY,
+    neuralDraftWebhookSecret: process.env.NEURAL_DRAFT_WEBHOOK_SECRET,
+    public: {
+      neuralDraftPublicApiUrl: "https://api.neuraldraft.io/v1",
+    },
+  },
+});
+```
+
+## Server-side composable
+
+Server-only — uses the secret API key. Importable from `~/server/api/*` and
+plugins.
+
+```ts filename="server/utils/neural-draft.ts"
+import { NeuralDraft } from "@neuraldraft/sdk";
+import { createHmac, timingSafeEqual } from "node:crypto";
+
+export function getNeuralDraft(event?: any) {
+  const config = useRuntimeConfig(event);
+  return new NeuralDraft({ apiKey: config.neuralDraftApiKey });
+}
+
+export function verifyNeuralDraftSignature(
+  body: string,
+  header: string,
+  secret: string,
+  toleranceSeconds = 300
+): boolean {
+  const parts = Object.fromEntries(
+    header.split(",").map((p) => p.split("=") as [string, string])
+  );
+  const t = Number(parts.t);
+  const v1 = parts.v1;
+  if (!Number.isFinite(t) || !v1 || !secret) return false;
+
+  const now = Math.floor(Date.now() / 1000);
+  if (Math.abs(now - t) > toleranceSeconds) return false;
+
+  const signed = `${t}.${body}`;
+  const expected = createHmac("sha256", secret).update(signed).digest("hex");
+  const a = Buffer.from(expected, "hex");
+  const b = Buffer.from(v1, "hex");
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+```
+
+## A blog index server route
+
+```ts filename="server/api/blog.get.ts"
+export default defineEventHandler(async (event) => {
+  const nd = getNeuralDraft(event);
+  const { data } = await nd.blogPosts.list({
+    status: "published",
+    lang: "en",
+    per_page: 50,
+  });
+  return data;
+});
+```
+
+## A blog page
+
+```vue filename="pages/blog/index.vue"
+<script setup lang="ts">
+const { data: posts } = await useFetch("/api/blog");
+</script>
+
+<template>
+  <main class="prose mx-auto py-12">
+    <h1>Blog</h1>
+    <ul>
+      <li v-for="post in posts" :key="post.id">
+        <NuxtLink :to="`/blog/${post.slug}`">
+          <h2>{{ post.title }}</h2>
+          <p>{{ post.excerpt }}</p>
+        </NuxtLink>
+      </li>
+    </ul>
+  </main>
+</template>
+```
+
+```vue filename="pages/blog/[slug].vue"
+<script setup lang="ts">
+const route = useRoute();
+const { data: post } = await useFetch(`/api/blog/${route.params.slug}`);
+</script>
+
+<template>
+  <article v-if="post" class="prose mx-auto py-12">
+    <h1>{{ post.title }}</h1>
+    <img v-if="post.featured_image" :src="post.featured_image" :alt="post.title" />
+    <div v-html="post.content" />
+  </article>
+</template>
+```
+
+```ts filename="server/api/blog/[slug].get.ts"
+export default defineEventHandler(async (event) => {
+  const slug = getRouterParam(event, "slug");
+  if (!slug) throw createError({ statusCode: 404 });
+
+  const nd = getNeuralDraft(event);
+  return await nd.blogPosts.bySlug(slug, { lang: "en" });
+});
+```
+
+## Webhook handler
+
+```ts filename="server/api/neural-draft.post.ts"
+export default defineEventHandler(async (event) => {
+  const config = useRuntimeConfig(event);
+  const body = await readRawBody(event, "utf8");
+  if (!body) throw createError({ statusCode: 400, statusMessage: "missing body" });
+
+  const sig = getHeader(event, "x-neural-draft-signature") ?? "";
+  if (!verifyNeuralDraftSignature(body, sig, config.neuralDraftWebhookSecret)) {
+    throw createError({ statusCode: 401, statusMessage: "invalid signature" });
+  }
+
+  const payload = JSON.parse(body) as { type: string; data: any };
+
+  // Acknowledge fast; do work async if needed.
+  switch (payload.type) {
+    case "blog_post.published":
+    case "content.changed":
+      // For ISR/SSG hosts, hit your platform's deploy hook here.
+      break;
+    case "order.paid":
+      // Send fulfilment email, sync to CRM, etc.
+      break;
+  }
+
+  return { received: true };
+});
+```
+
+## A composable for client-side public reads
+
+For unauthenticated reads (e.g. public product catalogue), use the public API
+directly from the browser.
+
+```ts filename="composables/useNeuralDraftPublic.ts"
+export function useNeuralDraftPublic() {
+  const config = useRuntimeConfig();
+  const baseUrl = config.public.neuralDraftPublicApiUrl;
+
+  return {
+    listProducts: () => $fetch(`${baseUrl}/public/products`),
+    productBySlug: (slug: string) => $fetch(`${baseUrl}/public/products/${slug}`),
+  };
+}
+```
+
+## Notes
+
+- Always read **raw** body in the webhook handler. `readBody()` parses JSON
+  and breaks the HMAC; use `readRawBody()`.
+- Public endpoints don't accept your API key — use `useNeuralDraftPublic`
+  directly from the browser only for `/v1/public/*` routes.
+- For multi-language sites, parameterise `lang` in your fetches and key your
+  cache by locale.

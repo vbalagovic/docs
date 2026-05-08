@@ -1,81 +1,203 @@
 ---
 title: "Quickstart"
-description: "Start building awesome documentation in minutes"
-icon: 'rocket'
+description: "Get a working Neural Draft integration — key, SDK, first API call — in under five minutes."
 ---
 
-## Get started in three steps
+You'll go from zero to a real, server-acknowledged blog post in five steps. The
+last step is optional but unlocks the part our customers love most: AI codegen
+tools that generate Neural Draft-native code without you teaching them.
 
-Get your documentation site running locally and make your first customization.
+<Steps>
+  <Step title="Create a project">
+    Sign up at [app.neuraldraft.io/register](https://app.neuraldraft.io/register).
+    The form takes ~90 seconds and asks for the bare minimum: project name,
+    industry, brand voice, brand colors, target languages, and target audience.
+    These six fields populate your **brand context** — the canonical resource
+    every AI tool reads before it generates anything.
 
-### Step 1: Set up your local environment
+    <Tip>
+      Already have a project? Skip ahead to step 2.
+    </Tip>
+  </Step>
 
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
-    
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
+  <Step title="Get your API key">
+    From the dashboard, open **Settings → API keys → Create key**. Pick a name
+    (e.g. `dev-laptop`) and the scopes you need.
 
-### Step 2: Deploy your changes
+    Your key looks like this:
 
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
+    ```
+    ndsk_live_2NgcaXxFqLPo7K3vR8zHwT5sE9bM1nDc
+    ```
 
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
+    The prefix tells you the environment: `ndsk_live_` is production,
+    `ndsk_test_` is the sandbox. Keys are shown **once** — copy them straight
+    into your secret manager.
 
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
+    <Warning>
+      Never commit a key to git. Use environment variables, a secret manager,
+      or your platform's encrypted env (Vercel, Fly, Render). Compromised keys
+      can be rotated from the dashboard at any time.
+    </Warning>
 
-### Step 3: Go live
+    Now export it for the rest of this guide:
 
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
+    ```bash
+    export NEURAL_DRAFT_API_KEY=ndsk_live_2NgcaXxFqLPo7K3vR8zHwT5sE9bM1nDc
+    ```
+  </Step>
 
-## Next steps
+  <Step title="Install the SDK (or use cURL)">
+    The TypeScript SDK is the fastest path on Node and the browser.
 
-Now that you have your docs running, explore these key features:
+    <CodeGroup>
+
+    ```bash npm
+    npm install @neuraldraft/sdk
+    ```
+
+    ```bash pnpm
+    pnpm add @neuraldraft/sdk
+    ```
+
+    ```bash bun
+    bun add @neuraldraft/sdk
+    ```
+
+    ```bash yarn
+    yarn add @neuraldraft/sdk
+    ```
+
+    </CodeGroup>
+
+    Prefer cURL or another language? Skip the install — every endpoint is a
+    plain HTTP call.
+
+    <Tip>
+      Python and PHP SDKs ship in the next release. Until then, see the
+      [snippets](/snippets/vanilla) for hand-rolled clients in either language.
+    </Tip>
+  </Step>
+
+  <Step title="Make your first call">
+    A round trip: verify the key, then create a draft blog post.
+
+    <CodeGroup>
+
+    ```bash cURL
+    # Verify the key
+    curl https://api.neuraldraft.io/v1/projects/me \
+      -H "Authorization: Bearer $NEURAL_DRAFT_API_KEY"
+
+    # Create a draft blog post
+    curl https://api.neuraldraft.io/v1/blog-posts \
+      -H "Authorization: Bearer $NEURAL_DRAFT_API_KEY" \
+      -H "Content-Type: application/json" \
+      -d '{
+        "title": "Five things we shipped this week",
+        "content": "<p>It was a busy week.</p>",
+        "language_code": "en",
+        "status": "draft"
+      }'
+    ```
+
+    ```ts Node
+    import { NeuralDraft } from "@neuraldraft/sdk";
+
+    const nd = new NeuralDraft({ apiKey: process.env.NEURAL_DRAFT_API_KEY! });
+
+    // Verify the key
+    const project = await nd.projects.me();
+    console.log(`Hello, ${project.name}`);
+
+    // Create a draft blog post
+    const post = await nd.blogPosts.create({
+      title: "Five things we shipped this week",
+      content: "<p>It was a busy week.</p>",
+      language_code: "en",
+      status: "draft",
+    });
+
+    console.log(`Draft created: /blog/${post.slug}`);
+    ```
+
+    </CodeGroup>
+
+    Expected response:
+
+    ```json
+    {
+      "id": 4711,
+      "slug": "five-things-we-shipped-this-week",
+      "status": "draft",
+      "title": "Five things we shipped this week",
+      "language_code": "en",
+      "category": null,
+      "tags": [],
+      "featured_image": null,
+      "published_at": null,
+      "scheduled_at": null,
+      "created_at": "2026-04-19T10:14:22Z",
+      "updated_at": "2026-04-19T10:14:22Z"
+    }
+    ```
+
+    Open `app.neuraldraft.io` and your draft is already there, ready to edit
+    or publish. **You're done with the API quickstart.**
+  </Step>
+
+  <Step title="Optional — install the MCP server">
+    This is the part that unlocks the magic: your editor's AI starts generating
+    Neural Draft-native code automatically.
+
+    Add the MCP server to Claude Code in one command:
+
+    ```bash
+    claude mcp add neural-draft --env NEURAL_DRAFT_API_KEY=$NEURAL_DRAFT_API_KEY -- npx -y @neuraldraft/mcp
+    ```
+
+    Or paste the snippet into `.cursor/mcp.json` for Cursor:
+
+    ```json
+    {
+      "mcpServers": {
+        "neural-draft": {
+          "command": "npx",
+          "args": ["-y", "@neuraldraft/mcp"],
+          "env": { "NEURAL_DRAFT_API_KEY": "ndsk_live_..." }
+        }
+      }
+    }
+    ```
+
+    Restart your editor. Now ask the AI:
+
+    > _"Generate a hero section for this site and register it with Neural Draft."_
+
+    Watch it read `brand://current` for your colors and voice, generate the
+    HTML with `data-translate` keys baked in, and call `register_component` so
+    the section appears in your admin as editable. No glue code.
+
+    Full setup (Claude Code, Cursor, Continue, plus the Lovable / v0 / Bolt
+    workaround) is on the [MCP setup](/mcp/setup) page.
+  </Step>
+</Steps>
+
+## What's next
 
 <CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
+  <Card title="Authentication" icon="key" href="/authentication">
+    Scopes, rotation, environment separation, and the full list of
+    `401`/`403` failure modes.
+  </Card>
+  <Card title="Pricing & credits" icon="credit-card" href="/pricing-and-credits">
+    What every operation costs and what happens when you hit zero.
+  </Card>
+  <Card title="The five pillars" icon="layer-group" href="/pillars/cms">
+    CMS, blog, social, booking, commerce — what each one gives you and the
+    workflows we see most often.
+  </Card>
+  <Card title="Webhooks" icon="webhook" href="/webhooks">
+    Skip polling. Get an HTTP POST every time something changes.
+  </Card>
 </CardGroup>
-
-<Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
-</Note>

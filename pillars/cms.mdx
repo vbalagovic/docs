@@ -1,0 +1,174 @@
+---
+title: "CMS"
+description: "The editable layer for AI-built sites. Translation keys, image keys, brand context, register-a-component."
+---
+
+The CMS pillar is what turns a static AI-generated site into a real, editable
+property. Every text node and image you mark up with our conventions becomes a
+field in the project's admin — no schemas, no migrations, no glue code.
+
+## What this gives you
+
+- **Translation keys** — dot-namespaced keys (`hero.headline`, `pricing.tiers.0.title`)
+  with per-language values. One bulk endpoint feeds your build process.
+- **Image keys** — `data-image-key="hero.background"` on an `<img>`. The
+  customer can swap the image in the admin; your build resolves the URL.
+- **Brand context** — voice, colors, fonts, audience exposed as a single
+  resource. Read once at build time, or hot-fetch per request.
+- **Register-component** — turn AI-generated HTML into an admin-editable
+  section in one call, with `data-translate` keys auto-discovered.
+
+## Quick example
+
+Bulk-fetch every key for a locale at build time. One request, one response.
+
+<CodeGroup>
+
+```bash cURL
+curl "https://api.neuraldraft.io/v1/content/bulk?keys=hero.headline,hero.subhead,cta.label&lang=en" \
+  -H "Authorization: Bearer $NEURAL_DRAFT_API_KEY"
+```
+
+```ts Node
+import { NeuralDraft } from "@neuraldraft/sdk";
+
+const nd = new NeuralDraft({ apiKey: process.env.NEURAL_DRAFT_API_KEY! });
+
+const content = await nd.content.bulk({
+  keys: ["hero.headline", "hero.subhead", "cta.label"],
+  lang: "en",
+});
+// => { "hero.headline": "Welcome", "hero.subhead": "...", "cta.label": "Get started" }
+```
+
+</CodeGroup>
+
+Response:
+
+```json
+{
+  "hero.headline": "Welcome",
+  "hero.subhead": "We build software that scales.",
+  "cta.label": "Get started"
+}
+```
+
+Update one key:
+
+```bash
+curl -X PUT https://api.neuraldraft.io/v1/content/hero.headline \
+  -H "Authorization: Bearer $NEURAL_DRAFT_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"lang":"en","value":"Welcome to Acme"}'
+```
+
+## Common workflows
+
+### 1. Build-time fetch for SSG
+
+Static-site generators (Next.js, Astro, Nuxt, Hugo) call `/v1/content/bulk`
+once per locale at build time. Cache the response — re-fetch only when the
+`content.changed` webhook fires.
+
+### 2. Click-to-edit overlay on a live site
+
+Drop a tiny JS snippet into your HTML. It looks for `data-translate`
+attributes and turns them into inline-editable fields when the user is signed
+into the admin in the same browser.
+
+```html
+<script src="https://widgets.neuraldraft.io/v1/edit-overlay.js" defer></script>
+```
+
+The overlay calls `/v1/content/{key}` on save. Same backend, no rebuild.
+
+### 3. AI registers a generated section
+
+When the AI in your editor generates a hero, it calls
+`register_component(html, intent)` via MCP. The component appears in your
+admin instantly:
+
+```json
+POST /v1/components/register
+{
+  "html": "<section data-component='hero'><h1 data-translate='hero.headline'>Welcome</h1></section>",
+  "intent": "marketing hero"
+}
+```
+
+```json
+{
+  "component_id": "cmp_2NgcaXxFqLPo",
+  "editor_url": "https://app.neuraldraft.io/components/cmp_2NgcaXxFqLPo",
+  "keys_created": ["hero.headline"]
+}
+```
+
+The admin auto-discovers `hero.headline` as an editable text field. No schema
+work.
+
+### 4. Translate a key into N languages
+
+```bash
+curl -X POST https://api.neuraldraft.io/v1/content/hero.headline/translate \
+  -H "Authorization: Bearer $NEURAL_DRAFT_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"target_langs":["fr","de","es"]}'
+```
+
+Returns a `Job` id. Poll [`/v1/jobs/{id}`](/api-reference#tag/Jobs) for the
+result, or subscribe to the `content.changed` webhook event to get notified
+once each language lands.
+
+### 5. Brand context for AI prompts
+
+Read brand once, pass it into your AI calls. The MCP server does this for you;
+if you're calling the API directly:
+
+```bash
+curl https://api.neuraldraft.io/v1/brand \
+  -H "Authorization: Bearer $NEURAL_DRAFT_API_KEY"
+```
+
+```json
+{
+  "name": "Acme",
+  "description": "Software that scales.",
+  "voice": "friendly_professional",
+  "audience": "indie founders building with AI tools",
+  "colors": { "primary": "#7C3AED", "secondary": "#0F172A", "accent": "#A78BFA" },
+  "fonts": { "heading": "Inter", "body": "Inter" },
+  "default_language": "en",
+  "target_languages": ["en", "fr", "de"]
+}
+```
+
+## Conventions
+
+The two attributes the AI uses everywhere:
+
+```html
+<h1 data-translate="hero.headline">Welcome</h1>
+<p data-translate="hero.subhead">We build software that scales.</p>
+
+<img data-image-key="hero.background" src="..." alt="...">
+```
+
+Keys are case-sensitive, dot-namespaced, and lowercase by convention. Index
+keys for arrays follow `section.field.0.subfield`.
+
+## Reference
+
+| Endpoint                                       | Tag       |
+| ---------------------------------------------- | --------- |
+| `GET /v1/content/bulk`                         | [Content](/api-reference#tag/Content)    |
+| `GET /v1/content/{key}`                        | [Content](/api-reference#tag/Content)    |
+| `PUT /v1/content/{key}`                        | [Content](/api-reference#tag/Content)    |
+| `PUT /v1/content` (batch)                      | [Content](/api-reference#tag/Content)    |
+| `POST /v1/content/{key}/translate`             | [Content](/api-reference#tag/Content)    |
+| `POST /v1/components/register`                 | [Components](/api-reference#tag/Components) |
+| `GET /v1/components`                           | [Components](/api-reference#tag/Components) |
+| `GET /v1/brand`                                | [Brand](/api-reference#tag/Brand)        |
+| `PATCH /v1/brand`                              | [Brand](/api-reference#tag/Brand)        |
+| `POST /v1/images/upload`                       | [Images](/api-reference#tag/Images)      |
+| `POST /v1/images/generate`                     | [Images](/api-reference#tag/Images)      |

@@ -1,0 +1,148 @@
+---
+title: "Lovable / v0 / Bolt"
+description: "The system-prompt block that makes hosted AI builders generate Neural Draft-native code."
+---
+
+Lovable, v0, Bolt and Replit Agent don't yet support the Model Context
+Protocol. Until they do, paste the system-prompt block below into the **System
+Prompt** / **Project Instructions** / **Knowledge** section of the tool. It
+teaches the model the same conventions our MCP server enforces.
+
+When the upstream tool ships MCP support, you'll be able to drop this prompt
+and use [`@neuraldraft/mcp`](/mcp/setup) directly. Same conventions, less
+copy-paste.
+
+<Tip>
+  Replace the placeholders (`{PROJECT_ID}`, `{API_KEY}`, brand fields) before
+  pasting. In Lovable, you can paste the prompt verbatim and reference your
+  brand context separately via the Knowledge panel — pick whichever your tool
+  supports.
+</Tip>
+
+## Copy this
+
+````md
+You are building a frontend that uses **Neural Draft** as its backend.
+Neural Draft handles content (CMS), blog, social posts, bookings and
+e-commerce; you only generate the UI. Follow the rules below for every
+component you produce.
+
+# Project context
+
+- Project id: `{PROJECT_ID}`
+- API base: `https://api.neuraldraft.io/v1`
+- Public API base (no auth): `https://api.neuraldraft.io/v1/public`
+- Server-side API key (env var, never in the browser): `NEURAL_DRAFT_API_KEY`
+- Brand voice: `{voice}`, audience: `{audience}`, primary color
+  `{primary_hex}`, accent `{accent_hex}`, heading font `{heading_font}`,
+  body font `{body_font}`, default language `{default_lang}`, target
+  languages `{lang_list}`.
+
+# Markup conventions (always follow these)
+
+1. Wrap every human-visible text node with `data-translate="<key>"`. Keys are
+   dot-namespaced: `section.field` (e.g. `hero.headline`, `pricing.tiers.0.title`).
+   Use lowercase, no spaces, ASCII only.
+2. Wrap every `<img>` with `data-image-key="<key>"` and a sensible `alt`.
+   The `src` is a placeholder that the build-time fetch resolves.
+3. For lists/cards, key index-aware fields explicitly — e.g.
+   `pricing.tiers.0.name`, `pricing.tiers.0.price`. Don't reuse keys across
+   sections; collisions break the admin editor.
+
+# Where to fetch from
+
+- **Build time**: one bulk fetch per locale.
+  `GET /v1/content/bulk?keys=hero.headline,hero.subhead,…&lang={locale}`
+  with `Authorization: Bearer ${NEURAL_DRAFT_API_KEY}`.
+- **Client-side reads** (only on the browser): use
+  `/v1/public/content/bulk?keys=…&lang={locale}&project_id={PROJECT_ID}` —
+  no auth, public-cacheable.
+- **Blog**: `GET /v1/blog-posts?status=published&lang={locale}` for the
+  index, `GET /v1/blog-posts/{slug}?lang={locale}` for a single post.
+- **Products**: `GET /v1/public/products?project_id={PROJECT_ID}` for the
+  catalogue, `GET /v1/public/products/{slug}` for a detail page.
+- **Booking**: drop the widget — `<div data-nd-widget="booking"
+  data-service-id="{id}"></div>` plus `<script
+  src="https://widgets.neuraldraft.io/v1/booking.js" defer></script>`.
+- **Storefront buy button**: `<div data-nd-widget="buy-button"
+  data-product-id="{id}"></div>` plus
+  `https://widgets.neuraldraft.io/v1/buy-button.js`.
+
+# Brand application
+
+- Use `{primary_hex}` for primary CTAs and brand accents.
+- Use `{accent_hex}` for hover/active states.
+- Tone of voice: `{voice}`. Default copy I generate must match this voice;
+  the customer can override per-key in the admin.
+- Default to `{default_lang}` for generated copy. If the user asks for a
+  multi-language site, generate one HTML markup with `data-translate`
+  attributes — Neural Draft handles per-locale values.
+
+# Editable hero / pricing / CTA examples
+
+When asked for a hero section, produce something like:
+
+```html
+<section class="bg-purple-600 text-white py-24">
+  <div class="mx-auto max-w-3xl text-center">
+    <h1 data-translate="hero.headline" class="text-5xl font-bold">Welcome</h1>
+    <p data-translate="hero.subhead" class="mt-4 text-lg opacity-90">
+      Short value-prop here.
+    </p>
+    <a data-translate="hero.cta" href="#"
+       class="mt-8 inline-block rounded-full bg-white px-6 py-3 text-purple-700">
+      Get started
+    </a>
+  </div>
+</section>
+```
+
+For pricing tiers, use index-aware keys:
+
+```html
+<article>
+  <h3 data-translate="pricing.tiers.0.name">Hobby</h3>
+  <p data-translate="pricing.tiers.0.price">$25 / month</p>
+  <p data-translate="pricing.tiers.0.description">For solo founders.</p>
+</article>
+```
+
+# What NOT to do
+
+- Don't hard-code text. Always use `data-translate`.
+- Don't put the API key in the browser. Server-side only.
+- Don't invent endpoints. The full spec is at
+  https://docs.neuraldraft.io/api-reference.
+- Don't use `localStorage` for auth — Neural Draft is stateless from the
+  frontend's perspective.
+- Don't fetch each translation key separately. Always bulk-fetch.
+````
+
+## Why this works
+
+The model's job becomes mechanical: every text node gets a `data-translate`
+attribute, every image a `data-image-key`, every fetch routes to a real URL.
+On the Neural Draft side, the first time a key is seen we auto-create it as
+empty; the customer fills it in via the admin. No schema work, no migrations,
+no glue.
+
+If your tool also supports a "knowledge" or "files" section, paste the OpenAPI
+URL — `https://api.neuraldraft.io/v1/openapi.yaml` — and the model will
+ground its API calls in the spec.
+
+## Hosted-tool checklist
+
+| Tool                | Where to paste                                  | MCP support  |
+| ------------------- | ----------------------------------------------- | ------------ |
+| Lovable             | Project → System Prompt                         | Roadmap      |
+| v0 by Vercel        | Project Instructions                            | Roadmap      |
+| Bolt                | Knowledge / Project Context                     | Roadmap      |
+| Replit Agent        | Custom Instructions                             | Roadmap      |
+| Cursor              | `.cursor/rules/neural-draft.md`                 | **Native**   |
+| Claude Code         | `CLAUDE.md` at project root                     | **Native**   |
+| Continue            | `~/.continue/config.yaml` system prompt block   | **Native**   |
+
+For the three native MCP clients (Cursor / Claude Code / Continue), use the
+[MCP setup](/mcp/setup) guide instead — it gives the AI tool access to the
+real tools (`register_component`, `generate_blog_post`, `generate_image`,
+etc.), not just rules.

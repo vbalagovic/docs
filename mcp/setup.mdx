@@ -1,0 +1,182 @@
+---
+title: "MCP setup"
+description: "Install `@neuraldraft/mcp` in Claude Code, Cursor, Continue, or any other MCP-capable client."
+---
+
+`@neuraldraft/mcp` is a stdio MCP server published on npm. Every supported
+client spawns it as a local process and talks JSON-RPC over stdio. You only
+need three things:
+
+1. Node 18.18 or newer.
+2. A Neural Draft API key (`ndsk_live_...` or `ndsk_test_...`).
+3. Your editor of choice.
+
+<Tip>
+  For best results, mint a separate API key per machine — your audit log will
+  show "claude-code-laptop", "cursor-mac-mini" and so on rather than a single
+  ambiguous "personal".
+</Tip>
+
+## Claude Code
+
+The fastest path. The CLI handles everything:
+
+```bash
+claude mcp add neural-draft \
+  --env NEURAL_DRAFT_API_KEY=ndsk_live_... \
+  -- npx -y @neuraldraft/mcp
+```
+
+That writes the server config to `~/.config/claude-code/mcp.json` (or your
+platform's equivalent). To verify, restart Claude Code and run `/mcp` — you
+should see `neural-draft` listed under "Connected servers".
+
+If you'd rather edit the config by hand:
+
+```json
+{
+  "mcpServers": {
+    "neural-draft": {
+      "command": "npx",
+      "args": ["-y", "@neuraldraft/mcp"],
+      "env": {
+        "NEURAL_DRAFT_API_KEY": "ndsk_live_..."
+      }
+    }
+  }
+}
+```
+
+## Cursor
+
+Cursor reads `.cursor/mcp.json` either at the workspace root (project-scoped)
+or at `~/.cursor/mcp.json` (global).
+
+```json
+{
+  "mcpServers": {
+    "neural-draft": {
+      "command": "npx",
+      "args": ["-y", "@neuraldraft/mcp"],
+      "env": {
+        "NEURAL_DRAFT_API_KEY": "ndsk_live_..."
+      }
+    }
+  }
+}
+```
+
+Reload the workspace. Open the AI panel and confirm `neural-draft` appears
+under "MCP". When you ask Cursor to generate a section, it'll auto-call
+`register_component`.
+
+<Note>
+  Putting an API key in a workspace file checked into git is a footgun. Use
+  the global `~/.cursor/mcp.json` for personal keys, or a `.cursor/mcp.json`
+  with an env var indirection (e.g. `"NEURAL_DRAFT_API_KEY": "${env:NEURAL_DRAFT_API_KEY}"`)
+  and `.gitignore` the file.
+</Note>
+
+## Continue
+
+Add the server to `~/.continue/config.yaml`:
+
+```yaml
+experimental:
+  modelContextProtocolServers:
+    - transport:
+        type: stdio
+        command: npx
+        args: ["-y", "@neuraldraft/mcp"]
+      env:
+        NEURAL_DRAFT_API_KEY: ndsk_live_...
+```
+
+Reload Continue. The Neural Draft tools become available to any model you've
+configured.
+
+## Lovable, v0, Bolt — the workaround
+
+These hosted tools don't yet support MCP. For now, paste the system prompt at
+[snippets/lovable](/snippets/lovable) into your build prompt — it teaches the
+model the same conventions the MCP server enforces. When Lovable / v0 / Bolt
+add MCP support, this server will work as-is.
+
+## Multiple projects on one machine
+
+The cleanest pattern is **one server entry per project**, named for the
+project. The AI client UI shows them separately, so you can flip between
+projects without changing env vars:
+
+```json
+{
+  "mcpServers": {
+    "neural-draft-acme": {
+      "command": "npx",
+      "args": ["-y", "@neuraldraft/mcp"],
+      "env": { "NEURAL_DRAFT_API_KEY": "ndsk_live_acme..." }
+    },
+    "neural-draft-bigcorp": {
+      "command": "npx",
+      "args": ["-y", "@neuraldraft/mcp"],
+      "env": { "NEURAL_DRAFT_API_KEY": "ndsk_live_bigcorp..." }
+    }
+  }
+}
+```
+
+When asking the AI to "use Neural Draft", reference the entry by name — e.g.
+"use the neural-draft-acme tools". Most clients pick automatically based on
+which server has the relevant tool, but explicit is better for clarity.
+
+## Environment variables
+
+The server reads three env vars:
+
+| Variable                  | Required | Default                              |
+| ------------------------- | -------- | ------------------------------------ |
+| `NEURAL_DRAFT_API_KEY`    | Yes      | —                                    |
+| `NEURAL_DRAFT_API_URL`    | No       | `https://api.neuraldraft.io`       |
+| `NEURAL_DRAFT_PROJECT_ID` | No       | (resolved from the API key)          |
+
+Override `NEURAL_DRAFT_API_URL` only when pointing at a self-hosted API or our
+staging environment (`https://api.staging.neuraldraft.io`).
+
+## Verifying it works
+
+After install, ask the AI:
+
+> _"Read the Neural Draft brand context for this project."_
+
+You should see the AI invoke the `brand://current` resource. If it doesn't,
+the server didn't connect. Common causes:
+
+| Symptom                                                  | Fix                                                                                          |
+| -------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `npx: command not found`                                 | Install Node 18.18+. `node --version`.                                                       |
+| Server starts then crashes immediately                   | Check the API key prefix; it must match `ndsk_(live|test)_...`. The server validates on boot.|
+| AI doesn't see the tools                                 | Most clients require a workspace reload after editing the MCP config. Restart the editor.    |
+| Cursor shows "neural-draft" but no tools                 | Stale Node cache. `npx -y @neuraldraft/mcp@latest` to force re-download.                     |
+| `429` on every tool call                                 | You're inside a tight loop. Throttle your AI's session, or upgrade to a higher rate limit.   |
+
+If none of those: run the server manually with the inspector to see the raw
+JSON-RPC transcript:
+
+```bash
+NEURAL_DRAFT_API_KEY=ndsk_test_... npx @modelcontextprotocol/inspector \
+  npx -y @neuraldraft/mcp
+```
+
+Open `http://localhost:6274` and try `brand://current` directly.
+
+## What you get next
+
+<CardGroup cols={2}>
+  <Card title="Tools and resources" icon="wrench" href="/mcp/tools-and-resources">
+    The full reference: every tool, every resource, every parameter.
+  </Card>
+  <Card title="Snippets" icon="copy" href="/snippets/nextjs">
+    Drop-in framework integrations once you've got the AI generating Neural
+    Draft-native code.
+  </Card>
+</CardGroup>

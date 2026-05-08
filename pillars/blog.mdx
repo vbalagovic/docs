@@ -1,0 +1,190 @@
+---
+title: "Blog"
+description: "Posts, categories, tags, scheduling, multi-language translation, and the AI authoring pipeline."
+---
+
+The Blog pillar is a full content engine — not a header-and-body table. Posts
+have categories and tags, scheduling, multi-language translations, featured
+images, SEO meta, and a research → write → image → translate → publish
+pipeline that runs as one async job.
+
+## What this gives you
+
+- **Posts** with `draft`, `scheduled`, `published`, `archived` lifecycle.
+- **Translations** per language with their own title, content, excerpt, and
+  SEO meta.
+- **Categories** and **tags** with slugs, attached many-to-many.
+- **Scheduling** — set `scheduled_at` and we publish at the precise minute.
+- **AI authoring pipeline** — one POST kicks off topic research, writing,
+  image generation, translation to every target language, and SEO meta.
+
+## Quick example
+
+Create a published post in two locales:
+
+<CodeGroup>
+
+```bash cURL
+# Create the post in English
+curl -X POST https://api.neuraldraft.io/v1/blog-posts \
+  -H "Authorization: Bearer $NEURAL_DRAFT_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "Five things we shipped this week",
+    "content": "<p>It was a busy week.</p>",
+    "excerpt": "Highlights from the past seven days.",
+    "language_code": "en",
+    "status": "published",
+    "tags": ["weekly", "changelog"]
+  }'
+
+# Add a French translation
+curl -X PUT https://api.neuraldraft.io/v1/blog-posts/4711/translations/fr \
+  -H "Authorization: Bearer $NEURAL_DRAFT_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "Cinq choses que nous avons livrees cette semaine",
+    "content": "<p>La semaine a ete chargee.</p>",
+    "excerpt": "Les temps forts des sept derniers jours."
+  }'
+```
+
+```ts Node
+import { NeuralDraft } from "@neuraldraft/sdk";
+
+const nd = new NeuralDraft({ apiKey: process.env.NEURAL_DRAFT_API_KEY! });
+
+const post = await nd.blogPosts.create({
+  title: "Five things we shipped this week",
+  content: "<p>It was a busy week.</p>",
+  excerpt: "Highlights from the past seven days.",
+  language_code: "en",
+  status: "published",
+  tags: ["weekly", "changelog"],
+});
+
+await nd.blogPosts.translations.upsert(post.id, "fr", {
+  title: "Cinq choses que nous avons livrees cette semaine",
+  content: "<p>La semaine a ete chargee.</p>",
+  excerpt: "Les temps forts des sept derniers jours.",
+});
+```
+
+</CodeGroup>
+
+## Common workflows
+
+### 1. Generate a multi-language post end to end
+
+The headline workflow. One POST kicks off the full pipeline; we hand you a
+job id back. Subscribe to `blog_post.published` for the finished result.
+
+```bash
+curl -X POST https://api.neuraldraft.io/v1/jobs \
+  -H "Authorization: Bearer $NEURAL_DRAFT_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "type": "blog_post.generate",
+    "topic": "Why API-first beats site-builder-first for SMBs",
+    "tone": "friendly_professional",
+    "length": "medium",
+    "primary_keyword": "API-first CMS",
+    "translate_to_all_languages": true,
+    "enable_research": true
+  }'
+```
+
+```json
+{
+  "job_id": "job_2NgcaXxFqLPo",
+  "status": "pending",
+  "estimated_credits": 400
+}
+```
+
+The pipeline runs research → outline → write → featured-image → SEO meta →
+per-language translations. You can poll `GET /v1/jobs/{id}` for progress, or
+stream Server-Sent Events from `GET /v1/jobs/{id}/stream`.
+
+Cost: 400 credits — covers research, writing, image, and per-language
+translations.
+
+### 2. Schedule a post for next Tuesday
+
+```bash
+curl -X POST https://api.neuraldraft.io/v1/blog-posts/4711/schedule \
+  -H "Authorization: Bearer $NEURAL_DRAFT_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"scheduled_at":"2026-04-22T09:00:00Z"}'
+```
+
+The post enters `scheduled` state. At the exact minute we transition it to
+`published` and fire the `blog_post.published` webhook.
+
+### 3. Republish after editing
+
+Editing a `published` post updates content in place and increments
+`updated_at`. The `blog_post.updated` webhook fires (use this to invalidate
+your CDN cache).
+
+```bash
+curl -X PUT https://api.neuraldraft.io/v1/blog-posts/4711 \
+  -H "Authorization: Bearer $NEURAL_DRAFT_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"title":"Five things we shipped (updated)"}'
+```
+
+### 4. Translate an existing post into a new language
+
+If you've added a new target language to your project, kick off a translation
+job for an existing post:
+
+```bash
+curl -X POST https://api.neuraldraft.io/v1/jobs \
+  -H "Authorization: Bearer $NEURAL_DRAFT_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "type": "translation.batch",
+    "scope": "blog_post",
+    "scope_id": 4711,
+    "target_langs": ["es", "it"]
+  }'
+```
+
+Cost: 70 credits per language.
+
+### 5. Topic suggestions for a content calendar
+
+Brand-aware topic ideas, sized for a quarter of weekly publishing:
+
+```bash
+curl https://api.neuraldraft.io/v1/blog/topic-suggestions \
+  -H "Authorization: Bearer $NEURAL_DRAFT_API_KEY"
+```
+
+```json
+{
+  "data": [
+    { "topic": "API-first vs site-builder-first for SMBs", "rationale": "..." },
+    { "topic": "How MCP changes how teams ship integrations", "rationale": "..." }
+  ]
+}
+```
+
+## Reference
+
+| Endpoint                                          | Tag                                            |
+| ------------------------------------------------- | ---------------------------------------------- |
+| `GET /v1/blog-posts`                              | [Blog](/api-reference#tag/Blog)                |
+| `POST /v1/blog-posts`                             | [Blog](/api-reference#tag/Blog)                |
+| `GET /v1/blog-posts/{slug}`                       | [Blog](/api-reference#tag/Blog)                |
+| `PUT /v1/blog-posts/{id}`                         | [Blog](/api-reference#tag/Blog)                |
+| `POST /v1/blog-posts/{id}/publish`                | [Blog](/api-reference#tag/Blog)                |
+| `POST /v1/blog-posts/{id}/schedule`               | [Blog](/api-reference#tag/Blog)                |
+| `POST /v1/blog-posts/{id}/unpublish`              | [Blog](/api-reference#tag/Blog)                |
+| `GET /v1/blog-posts/{id}/translations`            | [Blog](/api-reference#tag/Blog)                |
+| `PUT /v1/blog-posts/{id}/translations/{lang}`     | [Blog](/api-reference#tag/Blog)                |
+| `GET /v1/categories`                              | [Blog](/api-reference#tag/Blog)                |
+| `GET /v1/tags`                                    | [Blog](/api-reference#tag/Blog)                |
+| `POST /v1/jobs` (`blog_post.generate`)            | [Jobs](/api-reference#tag/Jobs)                |
+| `GET /v1/blog/topic-suggestions`                  | [Blog](/api-reference#tag/Blog)                |
