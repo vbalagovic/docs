@@ -1445,7 +1445,7 @@ paths:
         the homepage first, then alphabetically by slug.
       operationId: listPages
       security:
-        - apiKey: [pages:read]
+        - apiKeyAuth: []
       parameters:
         - in: query
           name: type
@@ -1477,6 +1477,10 @@ paths:
                       page_size: { type: integer }
                       total: { type: integer }
                       last_page: { type: integer }
+        '401':
+          description: Missing or invalid API key.
+        '403':
+          description: API key lacks `pages:read` scope.
     post:
       tags: [Pages]
       summary: Create a page
@@ -1487,7 +1491,7 @@ paths:
         **Free** — does not consume credits.
       operationId: createPage
       security:
-        - apiKey: [pages:write]
+        - apiKeyAuth: []
       requestBody:
         required: true
         content:
@@ -1510,7 +1514,7 @@ paths:
       summary: Fetch a page by id or slug
       operationId: getPage
       security:
-        - apiKey: [pages:read]
+        - apiKeyAuth: []
       parameters:
         - in: path
           name: id_or_slug
@@ -1536,7 +1540,7 @@ paths:
         parameter must be the numeric id (not slug) for this endpoint.
       operationId: updatePage
       security:
-        - apiKey: [pages:write]
+        - apiKeyAuth: []
       parameters:
         - in: path
           name: id_or_slug
@@ -1556,6 +1560,10 @@ paths:
                 type: object
                 properties:
                   data: { $ref: '#/components/schemas/Page' }
+        '404':
+          description: Page not found.
+        '409':
+          description: Slug collision with another page.
     delete:
       tags: [Pages]
       summary: Soft-retire (default) or hard-delete (force=1) a page
@@ -1564,7 +1572,7 @@ paths:
         Refuses to delete the homepage.
       operationId: deletePage
       security:
-        - apiKey: [pages:write]
+        - apiKeyAuth: []
       parameters:
         - in: path
           name: id_or_slug
@@ -1587,7 +1595,7 @@ paths:
         `GET /jobs/{id}` for completion.
       operationId: generateVideo
       security:
-        - apiKey: [videos:write]
+        - apiKeyAuth: []
       requestBody:
         required: true
         content:
