@@ -2,21 +2,20 @@ name: Sync OpenAPI to docs site
 
 on:
   push:
-    branches: [main, production]
+    branches: [main]
     paths:
       - 'openapi.yaml'
-      - 'routes/api-v1/**'
-      - 'app/Http/Controllers/Api/V1/**'
-      - 'docs-site/**'
+      - 'docs.json'
+      - '.github/workflows/sync-openapi.yml'
   pull_request:
     paths:
       - 'openapi.yaml'
-      - 'docs-site/**'
+      - 'docs.json'
   workflow_dispatch:
 
 jobs:
   sync:
-    name: Lint OpenAPI and refresh docs symlink
+    name: Lint OpenAPI and validate docs config
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -30,31 +29,8 @@ jobs:
       - name: Lint OpenAPI
         run: npx --yes @redocly/cli@latest lint openapi.yaml
 
-      - name: Refresh docs-site symlink
-        if: github.event_name == 'push'
-        run: |
-          cd docs-site
-          # Recreate the symlink so docs-site/openapi.yaml -> ../openapi.yaml
-          rm -f openapi.yaml
-          ln -sf ../openapi.yaml openapi.yaml
-          ls -la openapi.yaml
-
-      - name: Commit symlink if changed
-        if: github.event_name == 'push'
-        run: |
-          if git diff --quiet docs-site/openapi.yaml; then
-            echo "No symlink change."
-            exit 0
-          fi
-          git config user.name "neural-draft-bot"
-          git config user.email "ci@neuraldraft.io"
-          git add docs-site/openapi.yaml
-          git commit -m "chore(docs): refresh openapi.yaml symlink (${GITHUB_SHA::7})"
-          git push
-
       - name: Validate docs.json
-        run: |
-          node -e "JSON.parse(require('fs').readFileSync('docs-site/docs.json','utf8'))"
+        run: node -e "JSON.parse(require('fs').readFileSync('docs.json','utf8'))"
 
   notify-mintlify:
     name: Trigger Mintlify rebuild
@@ -70,4 +46,6 @@ jobs:
             echo "MINTLIFY_WEBHOOK_URL not configured; skipping rebuild trigger."
             exit 0
           fi
-          curl -fsSL -X POST "$MINTLIFY_WEBHOOK_URL" -H "Content-Type: application/json" -d '{"trigger":"docs-sync"}'
+          curl -fsSL -X POST "$MINTLIFY_WEBHOOK_URL" \
+            -H "Content-Type: application/json" \
+            -d '{"trigger":"docs-sync"}'
