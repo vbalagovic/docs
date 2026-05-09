@@ -1647,21 +1647,71 @@ paths:
         '402':
           description: Insufficient credits.
   /images:
+    get:
+      tags: [Images]
+      summary: List registered images
+      description: |
+        Paginated list of image keys registered for the project (e.g. via
+        `register_image`, `generate_image`, or multipart upload). Optional
+        `prefix` narrows by user-key prefix. Read-only. Does not consume credits.
+      operationId: listImages
+      parameters:
+        - in: query
+          name: prefix
+          schema: { type: string, example: "hero." }
+          description: Filter by user-key prefix (e.g. `hero.` returns hero.background, hero.foreground).
+        - in: query
+          name: page
+          schema: { type: integer, minimum: 1, default: 1 }
+        - in: query
+          name: page_size
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+      responses:
+        "200":
+          description: Paginated image list.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/Image" }
+                  meta:
+                    type: object
+                    properties:
+                      page: { type: integer }
+                      page_size: { type: integer }
+                      total: { type: integer }
+                      last_page: { type: integer }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+      x-codeSamples:
+        - lang: curl
+          label: cURL
+          source: |
+            curl "https://api.neuraldraft.io/v1/images?prefix=hero." \
+              -H "Authorization: Bearer ndsk_live_yourkey"
+        - lang: node
+          label: Node (SDK)
+          source: |
+            const { data } = await nd.images.list({ prefix: "hero." });
     post:
       tags: [Images]
-      summary: Generate a brand-consistent image
+      summary: Generate or upload an image
       description: |
-        Kicks off async image generation. The job inherits the project's
-        brand context (colors, voice, audience) and produces an image stored
-        on Google Cloud Storage. Returns a [`Job`](#tag/Jobs) with
-        `type: image.generate`.
+        Two modes — discriminated by the request `Content-Type`:
 
-        On completion, the job's `result` contains `{ url, key, width, height }`.
-        If `key` was provided in the request, the asset is also addressable
-        as `GET /images/{key}`.
-
-        Costs **40 credits per image**.
-      operationId: generateImage
+        1. **AI generation** (`application/json`) — kicks off async generation
+           inheriting the project's brand context. Returns a [`Job`](#tag/Jobs)
+           with `type: image.generate`. On completion, `result` contains
+           `{ url, key, width, height }`. Costs **40 credits**.
+        2. **Direct upload** (`multipart/form-data`) — synchronous swap with
+           the uploaded file bytes. `file` and `key` are required. Returns the
+           registered [`Image`](#/components/schemas/Image) immediately. Costs
+           **0 credits**. Max 10MB; jpg/jpeg/png/webp/gif/svg only.
+      operationId: createImage
       requestBody:
         required: true
         content:
@@ -1674,33 +1724,73 @@ paths:
                   style: photorealistic
                   aspect_ratio: "16:9"
                   key: hero.background
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file, key]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: Image file (jpg/jpeg/png/webp/gif/svg). Max 10MB.
+                key:
+                  type: string
+                  pattern: "^[\\w.\\-\\/]+$"
+                  example: hero.background
+                  description: Stable image key.
       responses:
+        "201":
+          description: Image uploaded (multipart mode).
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/Image" }
         "202":
-          description: Image generation job queued.
+          description: Generation job queued (JSON mode).
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Job" }
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "402": { $ref: "#/components/responses/PaymentRequired" }
-        "503": { $ref: "#/components/responses/ServiceUnavailable" }
         "403": { $ref: "#/components/responses/Forbidden" }
+        "413":
+          description: Uploaded file exceeds 10MB (multipart mode).
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
       x-codeSamples:
         - lang: curl
-          label: cURL
+          label: cURL (AI)
           source: |
             curl -X POST https://api.neuraldraft.io/v1/images \
               -H "Authorization: Bearer ndsk_live_yourkey" \
               -H "Content-Type: application/json" \
               -d '{"prompt":"Serene yoga studio at dawn","style":"photorealistic","aspect_ratio":"16:9","key":"hero.background"}'
-        - lang: node
-          label: Node (SDK)
+        - lang: curl
+          label: cURL (upload)
           source: |
-            const job = await nd.images.generate({ prompt: "Serene yoga studio", aspectRatio: "16:9", key: "hero.background" });
-            const done = await nd.jobs.wait(job.id);
+            curl -X POST https://api.neuraldraft.io/v1/images \
+              -H "Authorization: Bearer ndsk_live_yourkey" \
+              -F "file=@hero.jpg" \
+              -F "key=hero.background"
+        - lang: node
+          label: Node (SDK — AI)
+          source: |
+            const job = await nd.images.generate({ prompt: "Serene yoga studio", aspect_ratio: "16:9", key: "hero.background" });
+            const done = await nd.jobs.poll(job.id);
             console.log(done.result.url);
+        - lang: node
+          label: Node (SDK — upload)
+          source: |
+            const file = await fs.openAsBlob("hero.jpg");
+            const img = await nd.images.upload("hero.background", file);
+            console.log(img.url);
         - lang: python
-          label: Python
+          label: Python (AI)
           source: |
             job = requests.post(
                 "https://api.neuraldraft.io/v1/images",
@@ -1773,13 +1863,16 @@ paths:
       tags: [Images]
       summary: Replace an image
       description: |
-        Two replacement modes:
+        Three replacement modes:
 
-        1. **Upload** — send `multipart/form-data` with a `file` part. Replaces
-           the image at `key` with the uploaded bytes. Costs 0 credits.
-        2. **Regenerate** — send `application/json` with `{ prompt, style? }`.
+        1. **Upload** — `multipart/form-data` with a `file` part. Synchronous;
+           returns the updated [`Image`](#/components/schemas/Image). 0 credits.
+           Max 10MB; jpg/jpeg/png/webp/gif/svg only.
+        2. **Direct URL** — `application/json` with `{ url }`. Synchronous;
+           returns the updated [`Image`](#/components/schemas/Image). 0 credits.
+        3. **Regenerate** — `application/json` with `{ regenerate: true, prompt, ... }`.
            Returns a [`Job`](#tag/Jobs) and replaces the image when complete.
-           Costs **40 credits**.
+           **40 credits**.
       operationId: replaceImage
       requestBody:
         required: true
@@ -1792,26 +1885,42 @@ paths:
                 file:
                   type: string
                   format: binary
-                  description: Image file (JPEG, PNG, WebP). Max 10MB.
+                  description: Image file (jpg/jpeg/png/webp/gif/svg). Max 10MB.
           application/json:
             schema:
               type: object
-              required: [prompt]
               properties:
-                prompt: { type: string }
+                url:
+                  type: string
+                  format: uri
+                  maxLength: 2000
+                  description: Direct image URL (mode 2). Mutually exclusive with `regenerate`.
+                regenerate:
+                  type: boolean
+                  description: If true, regenerate via AI (mode 3); requires `prompt`.
+                prompt: { type: string, minLength: 3, maxLength: 1000 }
                 style: { type: string, example: photorealistic }
                 aspect_ratio: { type: string, example: "16:9" }
             examples:
-              regenerate:
+              direct_url:
+                summary: Direct URL swap
                 value:
+                  url: https://cdn.example.com/new-hero.webp
+              regenerate:
+                summary: Regenerate via AI
+                value:
+                  regenerate: true
                   prompt: A serene yoga studio at dusk with golden light
                   style: photorealistic
       responses:
         "200":
-          description: Image replaced (upload mode).
+          description: Image replaced synchronously (upload or url mode).
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/Image" }
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/Image" }
         "202":
           description: Regeneration queued (regenerate mode).
           content:
@@ -1820,13 +1929,18 @@ paths:
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "402": { $ref: "#/components/responses/PaymentRequired" }
-        "503": { $ref: "#/components/responses/ServiceUnavailable" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "413":
           description: Uploaded file exceeds 10MB.
           content:
             application/problem+json:
               schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: Missing replacement mode (no `file`, `url`, or `regenerate`).
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
       x-codeSamples:
         - lang: curl
           label: cURL (upload)
@@ -6244,7 +6358,16 @@ components:
       required: [key, url]
       properties:
         key: { type: string, example: hero.background }
-        url: { type: string, format: uri, example: "https://cdn.neuraldraft.io/prj_2NfQmBcKpXY8/hero-background-89hf.jpg" }
+        url:
+          type: [string, "null"]
+          format: uri
+          example: "https://cdn.neuraldraft.io/prj_2NfQmBcKpXY8/hero-background-89hf.jpg"
+        created_at:
+          type: [string, "null"]
+          format: date-time
+        updated_at:
+          type: [string, "null"]
+          format: date-time
         width: { type: integer, example: 2048 }
         height: { type: integer, example: 1152 }
         bytes: { type: integer, example: 482911 }
@@ -6253,7 +6376,6 @@ components:
           type: boolean
           description: True if produced by AI generation; false if uploaded.
           example: true
-        created_at: { type: string, format: date-time }
     ImageGenerateInput:
       type: object
       required: [prompt]
