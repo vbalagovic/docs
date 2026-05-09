@@ -56,26 +56,25 @@ curl -X POST https://api.neuraldraft.io/v1/public/bookings \
   }'
 ```
 
-```ts Node
-import { NeuralDraft } from "@neuraldraft/sdk";
+```ts SDK (admin-side)
+import { NeuralDraftClient } from "@neuraldraft/sdk";
 
-const nd = new NeuralDraft({ apiKey: process.env.NEURAL_DRAFT_API_KEY! });
+const nd = new NeuralDraftClient({ apiKey: process.env.NEURALDRAFT_API_KEY! });
 
-// Slots for a date
-const { data: slots } = await nd.public.services.availability.slots(
-  "30-min-consult",
-  { date: "2026-04-25" }
-);
-
-// Book the first available
-const booking = await nd.public.bookings.create({
-  service_id: 12,
-  starts_at: slots[0].starts_at,
-  customer_name: "Ada Lovelace",
-  customer_email: "ada@example.com",
+// List + read services
+const { data: services } = await nd.booking.listServices({
+  status: "active",
+  page_size: 50,
 });
+const consult = await nd.booking.getService("30-min-consult");
 
-console.log(booking.booking_reference); // "BK-20260425-A1B2"
+// Generate the embed snippet for a service.
+// `getWidget` takes BOTH ids — read tenant id from `nd.projects.me()` once.
+const me = await nd.projects.me();
+const embed = await nd.booking.getWidget(me.id, consult.id);
+console.log(embed.embed_html);
+// '<script src="https://api.neuraldraft.io/v1/widgets/booking/{tenant}/{service}.js"
+//   async data-neuraldraft-booking="12"></script>'
 ```
 
 </CodeGroup>
@@ -86,7 +85,7 @@ console.log(booking.booking_reference); // "BK-20260425-A1B2"
 
 ```bash
 curl -X POST https://api.neuraldraft.io/v1/services \
-  -H "Authorization: Bearer $NEURAL_DRAFT_API_KEY" \
+  -H "Authorization: Bearer $NEURALDRAFT_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
     "name": "30-minute consultation",
@@ -112,7 +111,7 @@ see [commerce](/pillars/commerce).
 
 ```bash
 curl -X PUT https://api.neuraldraft.io/v1/services/12/availability \
-  -H "Authorization: Bearer $NEURAL_DRAFT_API_KEY" \
+  -H "Authorization: Bearer $NEURALDRAFT_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
     "schedule": [
@@ -132,7 +131,7 @@ in `/v1/booking-settings`).
 
 ```bash
 curl -X POST https://api.neuraldraft.io/v1/services/12/availability/blocks \
-  -H "Authorization: Bearer $NEURAL_DRAFT_API_KEY" \
+  -H "Authorization: Bearer $NEURALDRAFT_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"date":"2026-04-22"}'
 ```
@@ -158,7 +157,7 @@ can't be double-booked here.
 
 ```bash
 curl -X POST https://api.neuraldraft.io/v1/services/12/calendar-feeds \
-  -H "Authorization: Bearer $NEURAL_DRAFT_API_KEY" \
+  -H "Authorization: Bearer $NEURALDRAFT_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
     "name": "Airbnb",
@@ -174,10 +173,10 @@ We sync on a schedule and surface `last_sync_status` on the resource.
 
 ```bash
 curl -X POST https://api.neuraldraft.io/v1/bookings/452/confirm \
-  -H "Authorization: Bearer $NEURAL_DRAFT_API_KEY"
+  -H "Authorization: Bearer $NEURALDRAFT_API_KEY"
 
 curl -X POST https://api.neuraldraft.io/v1/bookings/452/cancel \
-  -H "Authorization: Bearer $NEURAL_DRAFT_API_KEY" \
+  -H "Authorization: Bearer $NEURALDRAFT_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"reason":"Customer requested rescheduling"}'
 ```
@@ -189,7 +188,7 @@ enforce your cancellation policy; the admin path overrides it.
 
 ```bash
 curl -X POST https://api.neuraldraft.io/v1/webhook-endpoints \
-  -H "Authorization: Bearer $NEURAL_DRAFT_API_KEY" \
+  -H "Authorization: Bearer $NEURALDRAFT_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
     "url": "https://example.com/api/neural-draft",

@@ -15,25 +15,25 @@ npm install @neuraldraft/sdk
 ```
 
 ```bash filename=".env"
-NEURAL_DRAFT_API_KEY=ndsk_live_...
-NEURAL_DRAFT_WEBHOOK_SECRET=whsec_...
+NEURALDRAFT_API_KEY=ndsk_live_...
+NEURALDRAFT_WEBHOOK_SECRET=whsec_...
 ```
 
 ## Shared client
 
 ```ts filename="src/lib/neural-draft.ts"
-import { NeuralDraft } from "@neuraldraft/sdk";
+import { NeuralDraftClient } from "@neuraldraft/sdk";
 import { createHmac, timingSafeEqual } from "node:crypto";
 
-const apiKey = import.meta.env.NEURAL_DRAFT_API_KEY ?? process.env.NEURAL_DRAFT_API_KEY;
-if (!apiKey) throw new Error("Missing NEURAL_DRAFT_API_KEY");
+const apiKey = import.meta.env.NEURALDRAFT_API_KEY ?? process.env.NEURALDRAFT_API_KEY;
+if (!apiKey) throw new Error("Missing NEURALDRAFT_API_KEY");
 
-export const nd = new NeuralDraft({ apiKey });
+export const nd = new NeuralDraftClient({ apiKey });
 
 export function verifyNeuralDraftSignature(
   body: string,
   header: string,
-  secret = import.meta.env.NEURAL_DRAFT_WEBHOOK_SECRET ?? "",
+  secret = import.meta.env.NEURALDRAFT_WEBHOOK_SECRET ?? "",
   toleranceSeconds = 300
 ): boolean {
   const parts = Object.fromEntries(
@@ -71,7 +71,7 @@ const blog = defineCollection({
       const res = await nd.blogPosts.list({
         status: "published",
         lang: "en",
-        per_page: 100,
+        page_size: 100,
         page,
       });
       all.push(...res.data);
@@ -185,6 +185,18 @@ export const POST: APIRoute = async ({ request }) => {
   });
 };
 ```
+
+## Hand this to your AI
+
+> _"Add a `/changelog` page that lists the last ten published blog posts
+> tagged 'changelog'. Use the existing `nd` client from `src/lib/neural-draft.ts`
+> and call `nd.blogPosts.list({ status: 'published', tag: 'changelog',
+> page_size: 10, sort: '-published_at' })`. Render every text node with
+> a `data-translate` key (`changelog.title`, `changelog.description`)
+> so the customer can edit copy in the Neural Draft admin."_
+
+With [`@neuraldraft/mcp`](/mcp/setup) installed, the AI will also call
+`register_component` to make the new page editable.
 
 ## Notes
 

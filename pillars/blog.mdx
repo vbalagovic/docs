@@ -20,54 +20,48 @@ pipeline that runs as one async job.
 
 ## Quick example
 
-Create a published post in two locales:
+Create a published post in English, then async-translate it into French:
 
 <CodeGroup>
 
-```bash cURL
-# Create the post in English
-curl -X POST https://api.neuraldraft.io/v1/blog-posts \
-  -H "Authorization: Bearer $NEURAL_DRAFT_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "title": "Five things we shipped this week",
-    "content": "<p>It was a busy week.</p>",
-    "excerpt": "Highlights from the past seven days.",
-    "language_code": "en",
-    "status": "published",
-    "tags": ["weekly", "changelog"]
-  }'
+```ts SDK
+import { NeuralDraftClient } from "@neuraldraft/sdk";
 
-# Add a French translation
-curl -X PUT https://api.neuraldraft.io/v1/blog-posts/4711/translations/fr \
-  -H "Authorization: Bearer $NEURAL_DRAFT_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "title": "Cinq choses que nous avons livrees cette semaine",
-    "content": "<p>La semaine a ete chargee.</p>",
-    "excerpt": "Les temps forts des sept derniers jours."
-  }'
-```
+const nd = new NeuralDraftClient({ apiKey: process.env.NEURALDRAFT_API_KEY! });
 
-```ts Node
-import { NeuralDraft } from "@neuraldraft/sdk";
-
-const nd = new NeuralDraft({ apiKey: process.env.NEURAL_DRAFT_API_KEY! });
-
+// Manual create (0 credits beyond plan post-quota). The SDK sets type="manual".
 const post = await nd.blogPosts.create({
   title: "Five things we shipped this week",
   content: "<p>It was a busy week.</p>",
   excerpt: "Highlights from the past seven days.",
   language_code: "en",
   status: "published",
-  tags: ["weekly", "changelog"],
 });
 
-await nd.blogPosts.translations.upsert(post.id, "fr", {
-  title: "Cinq choses que nous avons livrees cette semaine",
-  content: "<p>La semaine a ete chargee.</p>",
-  excerpt: "Les temps forts des sept derniers jours.",
-});
+// Async translate — returns a Job; 7 credits per language.
+const job = await nd.blogPosts.translate(post.id, ["fr"]);
+await nd.jobs.poll(job.id);
+```
+
+```bash cURL
+# Manual create — note the discriminator: type=manual
+curl -X POST https://api.neuraldraft.io/v1/blog-posts \
+  -H "Authorization: Bearer $NEURALDRAFT_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "type": "manual",
+    "title": "Five things we shipped this week",
+    "content": "<p>It was a busy week.</p>",
+    "excerpt": "Highlights from the past seven days.",
+    "language_code": "en",
+    "status": "published"
+  }'
+
+# Translate the post asynchronously (returns a Job)
+curl -X POST https://api.neuraldraft.io/v1/blog-posts/4711/translate \
+  -H "Authorization: Bearer $NEURALDRAFT_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"target_languages":["fr"]}'
 ```
 
 </CodeGroup>
@@ -76,100 +70,105 @@ await nd.blogPosts.translations.upsert(post.id, "fr", {
 
 ### 1. Generate a multi-language post end to end
 
-The headline workflow. One POST kicks off the full pipeline; we hand you a
-job id back. Subscribe to `blog_post.published` for the finished result.
+The headline workflow. One POST kicks off the full pipeline (research →
+outline → write → featured-image → SEO meta → per-language translations) and
+returns a Job reference. Subscribe to `blog_post.published` for the finished
+result, or poll.
 
-```bash
-curl -X POST https://api.neuraldraft.io/v1/jobs \
-  -H "Authorization: Bearer $NEURAL_DRAFT_API_KEY" \
+```ts SDK
+const job = await nd.blogPosts.generateAi({
+  topic: "Why API-first beats site-builder-first for SMBs",
+  style: "thought_leadership",
+  word_count: 1200,
+  primary_keyword: "API-first CMS",
+  translate_to_all: true, // translate into every project target language
+  enable_research: true,
+});
+
+const finished = await nd.jobs.poll(job.id, { timeoutMs: 10 * 60_000 });
+// finished.result?.blog_post_id
+```
+
+```bash cURL
+# Same endpoint as manual create — discriminator: type=ai
+curl -X POST https://api.neuraldraft.io/v1/blog-posts \
+  -H "Authorization: Bearer $NEURALDRAFT_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
-    "type": "blog_post.generate",
+    "type": "ai",
     "topic": "Why API-first beats site-builder-first for SMBs",
-    "tone": "friendly_professional",
-    "length": "medium",
+    "style": "thought_leadership",
+    "word_count": 1200,
     "primary_keyword": "API-first CMS",
-    "translate_to_all_languages": true,
+    "translate_to_all": true,
     "enable_research": true
   }'
 ```
 
-```json
-{
-  "job_id": "job_2NgcaXxFqLPo",
-  "status": "pending",
-  "estimated_credits": 60
-}
-```
-
-The pipeline runs research → outline → write → featured-image → SEO meta →
-per-language translations. You can poll `GET /v1/jobs/{id}` for progress, or
-stream Server-Sent Events from `GET /v1/jobs/{id}/stream`.
-
 Cost: **60 credits** for the post itself (`blog_post` — covers research,
 draft, and featured image). Per-language translations charge **7 credits
-each** (`translate_language`) on top.
+each** (`translate_language`) on top, billed when each language lands.
 
 ### 2. Schedule a post for next Tuesday
 
-```bash
+```ts SDK
+await nd.blogPosts.schedule(4711, "2026-05-19T09:00:00Z");
+// Or: nd.blogPosts.schedule(4711, new Date(...))
+```
+
+```bash cURL
 curl -X POST https://api.neuraldraft.io/v1/blog-posts/4711/schedule \
-  -H "Authorization: Bearer $NEURAL_DRAFT_API_KEY" \
+  -H "Authorization: Bearer $NEURALDRAFT_API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"scheduled_at":"2026-04-22T09:00:00Z"}'
+  -d '{"scheduled_at":"2026-05-19T09:00:00Z"}'
 ```
 
 The post enters `scheduled` state. At the exact minute we transition it to
 `published` and fire the `blog_post.published` webhook.
 
-### 3. Republish after editing
+### 3. Edit and republish
 
-Editing a `published` post updates content in place and increments
-`updated_at`. The `blog_post.updated` webhook fires (use this to invalidate
-your CDN cache).
+Patch a published post in-place. Text fields (`title`, `content`, `excerpt`,
+`meta_title`, `meta_description`) write to the translation row resolved by
+`language_code` (default `en`); post-level fields (`slug`, `status`,
+`category_id`, `featured_image`) write to the post itself.
 
-```bash
-curl -X PUT https://api.neuraldraft.io/v1/blog-posts/4711 \
-  -H "Authorization: Bearer $NEURAL_DRAFT_API_KEY" \
+```ts SDK
+await nd.blogPosts.update(4711, {
+  title: "Five things we shipped (updated)",
+  language_code: "en",
+});
+```
+
+```bash cURL
+curl -X PATCH https://api.neuraldraft.io/v1/blog-posts/4711 \
+  -H "Authorization: Bearer $NEURALDRAFT_API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"title":"Five things we shipped (updated)"}'
+  -d '{"title":"Five things we shipped (updated)","language_code":"en"}'
 ```
 
 ### 4. Translate an existing post into a new language
 
-If you've added a new target language to your project, kick off a translation
-job for an existing post:
-
-```bash
-curl -X POST https://api.neuraldraft.io/v1/jobs \
-  -H "Authorization: Bearer $NEURAL_DRAFT_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "type": "translation.batch",
-    "scope": "blog_post",
-    "scope_id": 4711,
-    "target_langs": ["es", "it"]
-  }'
+```ts SDK
+const job = await nd.blogPosts.translate(4711, ["es", "it"]);
+await nd.jobs.poll(job.id);
 ```
 
 Cost: **7 credits per language** (`translate_language`).
 
-### 5. Topic suggestions for a content calendar
+### 5. Lifecycle helpers
 
-Brand-aware topic ideas, sized for a quarter of weekly publishing:
+```ts SDK
+await nd.blogPosts.publish(4711);
+await nd.blogPosts.unpublish(4711);
+await nd.blogPosts.delete(4711);
 
-```bash
-curl https://api.neuraldraft.io/v1/blog/topic-suggestions \
-  -H "Authorization: Bearer $NEURAL_DRAFT_API_KEY"
-```
-
-```json
-{
-  "data": [
-    { "topic": "API-first vs site-builder-first for SMBs", "rationale": "..." },
-    { "topic": "How MCP changes how teams ship integrations", "rationale": "..." }
-  ]
-}
+// List + filter
+const { data: drafts } = await nd.blogPosts.list({
+  status: "draft",
+  page_size: 20,
+  sort: "-created_at",
+});
 ```
 
 ## Reference

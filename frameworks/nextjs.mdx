@@ -16,22 +16,22 @@ npm install @neuraldraft/sdk
 Add the env vars:
 
 ```bash filename=".env.local"
-NEURAL_DRAFT_API_KEY=ndsk_live_...
-NEURAL_DRAFT_WEBHOOK_SECRET=whsec_...
+NEURALDRAFT_API_KEY=ndsk_live_...
+NEURALDRAFT_WEBHOOK_SECRET=whsec_...
 ```
 
 ## The shared client
 
 ```ts filename="lib/neural-draft.ts"
-import { NeuralDraft } from "@neuraldraft/sdk";
+import { NeuralDraftClient } from "@neuraldraft/sdk";
 import { createHmac, timingSafeEqual } from "node:crypto";
 
-if (!process.env.NEURAL_DRAFT_API_KEY) {
-  throw new Error("Missing NEURAL_DRAFT_API_KEY in env.");
+if (!process.env.NEURALDRAFT_API_KEY) {
+  throw new Error("Missing NEURALDRAFT_API_KEY in env.");
 }
 
-export const neuralDraft = new NeuralDraft({
-  apiKey: process.env.NEURAL_DRAFT_API_KEY,
+export const neuralDraft = new NeuralDraftClient({
+  apiKey: process.env.NEURALDRAFT_API_KEY,
 });
 
 /**
@@ -41,7 +41,7 @@ export const neuralDraft = new NeuralDraft({
 export function verifyNeuralDraftSignature(
   body: string,
   header: string,
-  secret = process.env.NEURAL_DRAFT_WEBHOOK_SECRET ?? "",
+  secret = process.env.NEURALDRAFT_WEBHOOK_SECRET ?? "",
   toleranceSeconds = 300
 ): boolean {
   const parts = Object.fromEntries(
@@ -78,7 +78,7 @@ export default async function BlogIndex() {
   const { data: posts } = await neuralDraft.blogPosts.list({
     status: "published",
     lang: "en",
-    per_page: 20,
+    page_size: 20,
   });
 
   return (
@@ -108,7 +108,7 @@ export const revalidate = 3600;
 export async function generateStaticParams() {
   const { data } = await neuralDraft.blogPosts.list({
     status: "published",
-    per_page: 100,
+    page_size: 100,
   });
   return data.map((p) => ({ slug: p.slug }));
 }
@@ -119,7 +119,7 @@ export default async function PostPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const post = await neuralDraft.blogPosts.bySlug(slug, { lang: "en" }).catch(() => null);
+  const post = await neuralDraft.blogPosts.get(slug, { lang: "en" }).catch(() => null);
   if (!post) notFound();
 
   return (
@@ -210,7 +210,7 @@ export default function NewPostPage() {
 import { neuralDraft } from "@/lib/neural-draft";
 
 export async function ProductCard({ slug }: { slug: string }) {
-  const product = await neuralDraft.publicProducts.bySlug(slug);
+  const product = await neuralDraft.products.get(slug);
 
   return (
     <article className="rounded-lg border p-6">
@@ -227,6 +227,22 @@ export async function ProductCard({ slug }: { slug: string }) {
 }
 ```
 
+## Hand this to your AI
+
+Once `lib/neural-draft.ts` is in place, ask Claude Code or Cursor:
+
+> _"Add a `/about` page in the App Router. Use the Neural Draft SDK
+> (`neuralDraft` from `lib/neural-draft.ts`) to fetch the matching `Page`
+> via `pages.get('about')`, render `meta_title` / `meta_description` /
+> `og_image` in `generateMetadata`, then mark up the body with
+> `data-translate` keys (`about.headline`, `about.body`) and a
+> `data-image-key="about.hero"` image. Wire `register_component` through
+> the Neural Draft MCP server so the section is editable in the admin."_
+
+Pair this with [`@neuraldraft/mcp`](/mcp/setup) installed in your editor —
+the AI will read `brand://current` for colors and voice before generating
+the markup.
+
 ## Notes
 
 - `revalidatePath` requires Next.js 14+. On 13, swap to `res.revalidate()`
@@ -234,4 +250,4 @@ export async function ProductCard({ slug }: { slug: string }) {
 - The webhook route MUST read raw body via `req.text()` — `req.json()` parses
   and re-encodes, breaking the HMAC.
 - Build-time `generateStaticParams` is bounded by your rate limit. Use
-  `per_page: 100` and paginate if you have more than a few hundred posts.
+  `page_size: 100` and paginate if you have more than a few hundred posts.

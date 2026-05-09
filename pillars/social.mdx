@@ -30,7 +30,7 @@ Generate and schedule a cross-platform post in one shot.
 ```bash cURL
 # 1. Kick off generation
 curl -X POST https://api.neuraldraft.io/v1/jobs \
-  -H "Authorization: Bearer $NEURAL_DRAFT_API_KEY" \
+  -H "Authorization: Bearer $NEURALDRAFT_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
     "type": "social_post.generate",
@@ -44,29 +44,36 @@ curl -X POST https://api.neuraldraft.io/v1/jobs \
 
 # 2. After completion, schedule the resulting post
 curl -X POST https://api.neuraldraft.io/v1/social-posts/882/schedule \
-  -H "Authorization: Bearer $NEURAL_DRAFT_API_KEY" \
+  -H "Authorization: Bearer $NEURALDRAFT_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"scheduled_at":"2026-04-22T14:00:00Z"}'
 ```
 
-```ts Node
-import { NeuralDraft } from "@neuraldraft/sdk";
+```ts SDK
+// Social-post resources are not yet covered by the v0.3.0 SDK; call the REST
+// endpoints directly. The SDK does provide `jobs.poll()` for the async pieces.
+import { NeuralDraftClient } from "@neuraldraft/sdk";
 
-const nd = new NeuralDraft({ apiKey: process.env.NEURAL_DRAFT_API_KEY! });
+const nd = new NeuralDraftClient({ apiKey: process.env.NEURALDRAFT_API_KEY! });
 
-const job = await nd.jobs.create({
-  type: "social_post.generate",
-  custom_title: "Launching our v1 API",
-  platforms: ["facebook", "instagram", "twitter", "linkedin"],
-  tone: "warm",
-  media_type: "image",
-  visual_style: "minimal_brand",
-});
+const job = await fetch("https://api.neuraldraft.io/v1/jobs", {
+  method: "POST",
+  headers: {
+    Authorization: `Bearer ${process.env.NEURALDRAFT_API_KEY}`,
+    "Content-Type": "application/json",
+  },
+  body: JSON.stringify({
+    type: "social_post.generate",
+    custom_title: "Launching our v1 API",
+    platforms: ["facebook", "instagram", "twitter", "linkedin"],
+    tone: "warm",
+    media_type: "image",
+  }),
+}).then((r) => r.json());
 
-const post = await nd.jobs.waitFor(job.job_id);
-await nd.socialPosts.schedule(post.result.social_post_id, {
-  scheduled_at: "2026-04-22T14:00:00Z",
-});
+// Wait for completion using the SDK's job poller.
+const finished = await nd.jobs.poll(job.id);
+const socialPostId = finished.result?.social_post_id;
 ```
 
 </CodeGroup>
@@ -82,7 +89,7 @@ charges an extra **40 credits** (`video`, budget tier). Scheduling is free.
 
 ```bash
 curl -X POST https://api.neuraldraft.io/v1/social-accounts/connect/instagram \
-  -H "Authorization: Bearer $NEURAL_DRAFT_API_KEY" \
+  -H "Authorization: Bearer $NEURALDRAFT_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"redirect_uri":"https://example.com/oauth/callback"}'
 ```
@@ -101,7 +108,7 @@ Surface the URL to the user. After they authorize, we redirect to your
 
 ```bash
 curl https://api.neuraldraft.io/v1/social-accounts \
-  -H "Authorization: Bearer $NEURAL_DRAFT_API_KEY"
+  -H "Authorization: Bearer $NEURALDRAFT_API_KEY"
 ```
 
 ```json
@@ -118,7 +125,7 @@ Skip `schedule`; call `publish` instead.
 
 ```bash
 curl -X POST https://api.neuraldraft.io/v1/social-posts/882/publish \
-  -H "Authorization: Bearer $NEURAL_DRAFT_API_KEY"
+  -H "Authorization: Bearer $NEURALDRAFT_API_KEY"
 ```
 
 The post enters `published` state on success per platform; check the
@@ -144,7 +151,7 @@ before publish:
 
 ```bash
 curl -X PUT https://api.neuraldraft.io/v1/social-posts/882 \
-  -H "Authorization: Bearer $NEURAL_DRAFT_API_KEY" \
+  -H "Authorization: Bearer $NEURALDRAFT_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
     "twitter_content": "Launching our v1 API today. ndsk_live_... in your hand in 60 seconds."
@@ -158,7 +165,7 @@ post, summarises per platform, generates an image, and saves a draft.
 
 ```bash
 curl -X POST https://api.neuraldraft.io/v1/jobs \
-  -H "Authorization: Bearer $NEURAL_DRAFT_API_KEY" \
+  -H "Authorization: Bearer $NEURALDRAFT_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
     "type": "social_post.generate",

@@ -20,46 +20,63 @@ field in the project's admin — no schemas, no migrations, no glue code.
 
 ## Quick example
 
-Bulk-fetch every key for a locale at build time. One request, one response.
+Read a single key, then upsert one. The SDK exposes both as one-liners.
 
 <CodeGroup>
 
-```bash cURL
-curl "https://api.neuraldraft.io/v1/content/bulk?keys=hero.headline,hero.subhead,cta.label&lang=en" \
-  -H "Authorization: Bearer $NEURAL_DRAFT_API_KEY"
+```ts SDK
+import { NeuralDraftClient } from "@neuraldraft/sdk";
+
+const nd = new NeuralDraftClient({ apiKey: process.env.NEURALDRAFT_API_KEY! });
+
+// Read one key (response includes `all_locales` with every translation)
+const hero = await nd.content.get("hero.headline", { lang: "en" });
+console.log(hero.value);
+
+// Upsert (creates if missing). Charges 1 credit (`content_update`).
+await nd.content.set("hero.headline", "Welcome to Acme", "en");
 ```
 
-```ts Node
-import { NeuralDraft } from "@neuraldraft/sdk";
+```bash cURL
+# Bulk-read for build time (up to 200 keys per call)
+curl "https://api.neuraldraft.io/v1/content/bulk?keys=hero.headline,hero.subhead,cta.label&lang=en" \
+  -H "Authorization: Bearer $NEURALDRAFT_API_KEY"
 
-const nd = new NeuralDraft({ apiKey: process.env.NEURAL_DRAFT_API_KEY! });
-
-const content = await nd.content.bulk({
-  keys: ["hero.headline", "hero.subhead", "cta.label"],
-  lang: "en",
-});
-// => { "hero.headline": "Welcome", "hero.subhead": "...", "cta.label": "Get started" }
+# Upsert one key
+curl -X PUT https://api.neuraldraft.io/v1/content/hero.headline \
+  -H "Authorization: Bearer $NEURALDRAFT_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"lang":"en","value":"Welcome to Acme"}'
 ```
 
 </CodeGroup>
 
-Response:
+Bulk read response shape:
 
 ```json
 {
-  "hero.headline": "Welcome",
-  "hero.subhead": "We build software that scales.",
-  "cta.label": "Get started"
+  "data": {
+    "hero.headline": "Welcome",
+    "hero.subhead": "We build software that scales.",
+    "cta.label": "Get started"
+  },
+  "meta": { "lang": "en", "page": 1, "page_size": 200, "total": 3 }
 }
 ```
 
-Update one key:
+Seed many keys at once with `bulkCreate` (idempotent — existing keys are
+skipped, not failed):
 
-```bash
-curl -X PUT https://api.neuraldraft.io/v1/content/hero.headline \
-  -H "Authorization: Bearer $NEURAL_DRAFT_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"lang":"en","value":"Welcome to Acme"}'
+```ts
+await nd.content.bulkCreate(
+  {
+    "hero.headline": "Welcome",
+    "hero.subhead": "We build software that scales.",
+    "cta.label": "Get started",
+  },
+  "en",
+);
+// => { created: ["hero.headline", "hero.subhead", "cta.label"], skipped_existing: [] }
 ```
 
 <Note>
@@ -118,37 +135,54 @@ work.
 
 ### 4. Translate a key into N languages
 
-```bash
+```ts SDK
+const job = await nd.content.translate("hero.headline", ["fr", "de", "es"]);
+const finished = await nd.jobs.poll(job.id);
+// finished.status === "completed"
+```
+
+```bash cURL
 curl -X POST https://api.neuraldraft.io/v1/content/hero.headline/translate \
-  -H "Authorization: Bearer $NEURAL_DRAFT_API_KEY" \
+  -H "Authorization: Bearer $NEURALDRAFT_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"target_langs":["fr","de","es"]}'
 ```
 
-Returns a `Job` id. Poll [`/v1/jobs/{id}`](/api-reference#tag/Jobs) for the
-result, or subscribe to the `content.changed` webhook event to get notified
-once each language lands.
+Returns a `Job` reference. Poll [`/v1/jobs/{id}`](/api-reference#tag/Jobs) (or
+`nd.jobs.poll(id)`) until terminal, or subscribe to the `content.changed`
+webhook to get notified once each language lands. Charges **7 credits per
+target language** (`translate_language`).
 
 ### 5. Brand context for AI prompts
 
 Read brand once, pass it into your AI calls. The MCP server does this for you;
 if you're calling the API directly:
 
-```bash
+```ts SDK
+const brand = await nd.brand.get();
+// Patch a field — `null` clears it.
+await nd.brand.update({ voice: "friendly_professional" });
+```
+
+```bash cURL
 curl https://api.neuraldraft.io/v1/brand \
-  -H "Authorization: Bearer $NEURAL_DRAFT_API_KEY"
+  -H "Authorization: Bearer $NEURALDRAFT_API_KEY"
 ```
 
 ```json
 {
-  "name": "Acme",
-  "description": "Software that scales.",
   "voice": "friendly_professional",
   "audience": "indie founders building with AI tools",
-  "colors": { "primary": "#7C3AED", "secondary": "#0F172A", "accent": "#A78BFA" },
+  "content_tone": "warm",
+  "colors": {
+    "primary": { "hex": "#7C3AED", "name": "Purple" },
+    "secondary": { "hex": "#0F172A", "name": "Ink" },
+    "accent": { "hex": "#A78BFA", "name": "Lavender" }
+  },
   "fonts": { "heading": "Inter", "body": "Inter" },
   "default_language": "en",
-  "target_languages": ["en", "fr", "de"]
+  "target_languages": ["en", "fr", "de"],
+  "requires_branding_badge": false
 }
 ```
 
@@ -186,13 +220,13 @@ page `title` is used as the document title.
 
 ```bash cURL
 curl https://api.neuraldraft.io/v1/pages/about \
-  -H "Authorization: Bearer $NEURAL_DRAFT_API_KEY"
+  -H "Authorization: Bearer $NEURALDRAFT_API_KEY"
 ```
 
-```ts Node (SDK)
+```ts SDK
 import { NeuralDraftClient } from "@neuraldraft/sdk";
 
-const nd = new NeuralDraftClient({ apiKey: process.env.NEURAL_DRAFT_API_KEY! });
+const nd = new NeuralDraftClient({ apiKey: process.env.NEURALDRAFT_API_KEY! });
 
 const page = await nd.pages.get("about");
 // =>
@@ -200,12 +234,28 @@ const page = await nd.pages.get("about");
 //   id: 42,
 //   slug: "about",
 //   title: "About us",
+//   type: "landing",
+//   is_homepage: false,
+//   is_active: true,
 //   meta_title: "About — Acme",
 //   meta_description: "We build software that scales.",
 //   og_image: "https://cdn.example.com/og/about.jpg",
 //   canonical_url: null,
 //   ...
 // }
+
+// Create a page with SEO meta in one call (1 credit)
+await nd.pages.create({
+  slug: "about",
+  title: "About us",
+  type: "landing",
+  meta_title: "About — Acme",
+  meta_description: "Built by makers who hate boilerplate.",
+  og_image: "https://cdn.example.com/og/about.jpg",
+});
+
+// List pages (filter by type / is_active)
+const { data: pages } = await nd.pages.list({ page_size: 50, type: "landing" });
 ```
 
 </CodeGroup>
@@ -225,7 +275,7 @@ the post).
 
 ```bash cURL
 curl "https://api.neuraldraft.io/v1/blog-posts/5-minute-breathwork-for-anxious-mornings?lang=en" \
-  -H "Authorization: Bearer $NEURAL_DRAFT_API_KEY"
+  -H "Authorization: Bearer $NEURALDRAFT_API_KEY"
 ```
 
 ```ts Node (SDK)
@@ -258,6 +308,36 @@ await nd.blogPosts.update(post.id, {
 
 For a blog post the same template applies, swapping `page.og_image` with
 `post.featured_image`.
+
+## Images
+
+Three flavours, all routing through the same `Image` resource:
+
+```ts
+// 1. AI-generate (32 credits, async — returns a Job)
+const job = await nd.images.generate({
+  prompt: "warm morning light over a yoga mat, soft focus",
+  aspect_ratio: "16:9",
+  key: "hero.background",
+});
+const finished = await nd.jobs.poll(job.id);
+// finished.result => { url, key, width, height }
+
+// 2. Direct upload from a File / Blob / Buffer (1 credit, sync)
+await nd.images.upload("hero.background", file, { filename: "hero.jpg" });
+
+// 3. Replace by URL — no AI roundtrip (1 credit, sync)
+await nd.images.replace("hero.background", { url: "https://cdn.example.com/x.jpg" });
+
+// Resolve / list / delete
+const img = await nd.images.get("hero.background");
+const { data } = await nd.images.list({ prefix: "hero.", page_size: 50 });
+await nd.images.delete("hero.background");
+```
+
+Both `upload()` and `replaceFile()` accept a Web `File`/`Blob` (browser, Bun,
+Node 20+) or a Node `Buffer`/`Uint8Array`. For raw buffers, supply
+`opts.filename` so the server can derive the file extension.
 
 ## Reference
 
@@ -306,14 +386,14 @@ unauthenticated client-side embeds where you don't want to ship a key):
 # Newsletter — idempotent. Re-submitting an existing email returns 200 with
 # status="already_subscribed" instead of an error.
 curl -X POST https://api.neuraldraft.io/v1/newsletters/subscribe \
-  -H "X-NeuralDraft-Project-Key: $NEURAL_DRAFT_API_KEY" \
+  -H "X-NeuralDraft-Project-Key: $NEURALDRAFT_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"email":"jane@example.com","app_lead":false}'
 
 # Contact form — `data` is free-form JSON for whatever your form collects;
 # IP and user-agent are merged in server-side for spam triage.
 curl -X POST https://api.neuraldraft.io/v1/contact-forms \
-  -H "X-NeuralDraft-Project-Key: $NEURAL_DRAFT_API_KEY" \
+  -H "X-NeuralDraft-Project-Key: $NEURALDRAFT_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
     "email": "jane@example.com",

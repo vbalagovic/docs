@@ -139,7 +139,7 @@ When you need to use your API key — never from the browser — this is the
 shortest possible authed call:
 
 ```js filename="post.mjs"
-const KEY = process.env.NEURAL_DRAFT_API_KEY;
+const KEY = process.env.NEURALDRAFT_API_KEY;
 
 const res = await fetch("https://api.neuraldraft.io/v1/blog-posts", {
   method: "POST",
@@ -148,6 +148,7 @@ const res = await fetch("https://api.neuraldraft.io/v1/blog-posts", {
     "Content-Type": "application/json",
   },
   body: JSON.stringify({
+    type: "manual",
     title: "Hello, world",
     content: "<p>The first post.</p>",
     language_code: "en",
@@ -156,12 +157,48 @@ const res = await fetch("https://api.neuraldraft.io/v1/blog-posts", {
 });
 
 const post = await res.json();
-console.log(post.slug);
+console.log(post.data.slug);
 ```
 
 ```bash
-NEURAL_DRAFT_API_KEY=ndsk_live_... node post.mjs
+NEURALDRAFT_API_KEY=ndsk_live_... node post.mjs
 ```
+
+## Or — use the SDK from a one-off Node script
+
+If you have npm available, the official SDK is the fastest path:
+
+```js filename="post-via-sdk.mjs"
+import { NeuralDraftClient } from "@neuraldraft/sdk";
+
+const nd = new NeuralDraftClient({
+  apiKey: process.env.NEURALDRAFT_API_KEY,
+});
+
+const post = await nd.blogPosts.create({
+  title: "Hello, world",
+  content: "<p>The first post.</p>",
+  language_code: "en",
+  status: "draft",
+});
+
+console.log(post.slug);
+```
+
+## Hand this to your AI
+
+If your AI tool supports MCP (Claude Code, Cursor, Continue), install
+[`@neuraldraft/mcp`](/mcp/setup) and ask:
+
+> _"This is a single-file static site. Add Neural Draft so the customer
+> can edit hero / about / footer copy from the admin. Mark every visible
+> text node with `data-translate="<section>.<field>"`, every image with
+> `data-image-key`, and add a build-time fetch to
+> `/v1/public/content/bulk?keys=...&lang=en&project_id={PROJECT_ID}` that
+> populates each node before paint."_
+
+For tools without MCP support (Lovable, v0, Bolt), paste the prompt block
+from [/frameworks/lovable](/frameworks/lovable) into their system prompt.
 
 ## Notes
 

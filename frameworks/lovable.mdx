@@ -32,7 +32,7 @@ component you produce.
 - Project id: `{PROJECT_ID}`
 - API base: `https://api.neuraldraft.io/v1`
 - Public API base (no auth): `https://api.neuraldraft.io/v1/public`
-- Server-side API key (env var, never in the browser): `NEURAL_DRAFT_API_KEY`
+- Server-side API key (env var, never in the browser): `NEURALDRAFT_API_KEY`
 - Brand voice: `{voice}`, audience: `{audience}`, primary color
   `{primary_hex}`, accent `{accent_hex}`, heading font `{heading_font}`,
   body font `{body_font}`, default language `{default_lang}`, target
@@ -53,7 +53,7 @@ component you produce.
 
 - **Build time**: one bulk fetch per locale.
   `GET /v1/content/bulk?keys=hero.headline,hero.subhead,…&lang={locale}`
-  with `Authorization: Bearer ${NEURAL_DRAFT_API_KEY}`.
+  with `Authorization: Bearer ${NEURALDRAFT_API_KEY}`.
 - **Client-side reads** (only on the browser): use
   `/v1/public/content/bulk?keys=…&lang={locale}&project_id={PROJECT_ID}` —
   no auth, public-cacheable.
@@ -146,3 +146,36 @@ For the three native MCP clients (Cursor / Claude Code / Continue), use the
 [MCP setup](/mcp/setup) guide instead — it gives the AI tool access to the
 real tools (`register_component`, `generate_blog_post`, `generate_image`,
 etc.), not just rules.
+
+## Working example — Lovable system prompt + SDK glue
+
+If your Lovable project has a "Server functions" / Node runtime, drop this
+snippet into a server file. Once Lovable adds MCP, the same code keeps
+working.
+
+```ts filename="lib/neural-draft.ts"
+import { NeuralDraftClient } from "@neuraldraft/sdk";
+
+export const nd = new NeuralDraftClient({
+  apiKey: process.env.NEURALDRAFT_API_KEY!,
+});
+
+// Build-time content fetch
+export async function loadHomepageMeta() {
+  const page = await nd.pages.get("home");
+  return {
+    title: page.meta_title ?? page.title,
+    description: page.meta_description,
+    ogImage: page.og_image,
+  };
+}
+```
+
+Example prompt to paste into Lovable's project chat:
+
+> _"Build a marketing home page using the Neural Draft conventions in my
+> system prompt. Hero, three-feature grid, CTA, footer. Every text node
+> needs `data-translate="<key>"`. Every image needs
+> `data-image-key="<key>"`. Use `loadHomepageMeta()` from
+> `lib/neural-draft.ts` for `<title>` and meta tags. Default copy in the
+> brand voice listed in my system prompt."_

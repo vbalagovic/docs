@@ -7,9 +7,46 @@ We follow [SemVer](https://semver.org/) on the `/v1/*` surface. Breaking
 changes are versioned and announced 90 days in advance. Subscribe to the RSS
 feed for automated notifications.
 
-## 2026-05-09 — Central login workspace picker + docs alignment
+## 2026-05-09 — SDK 0.3.0 + MCP 0.3.0 + central login workspace picker
 
-**Added**
+**Added (SDK `@neuraldraft/sdk@0.3.0`)**
+
+- New `NeuralDraftClient` — single, well-typed entry point with resource
+  namespaces (`brand`, `content`, `components`, `blogPosts`, `pages`,
+  `images`, `products`, `booking`, `jobs`, `projects`).
+- `nd.content.set(key, value, lang, { scope? })` replaces the older
+  `content.upsert` shape. Charges 1 credit (`content_update`).
+- `nd.content.get(key, { lang })` returns one value plus the
+  `all_locales` map.
+- `nd.pages.list({ page_size, type, is_active })`, `nd.pages.create({ ...
+  meta_title, meta_description, og_image })` with **top-level** SEO meta
+  fields (no nested `metadata`).
+- `nd.blogPosts.create({ ... })` and `nd.blogPosts.generateAi({ ... })` —
+  flat shapes; the SDK adds the `type: "manual"` / `type: "ai"`
+  discriminator for you. No more `{ ai: { ... } }` wrapping.
+- `nd.blogPosts.translate(id, [langs])` — async batch translate, returns a
+  `JobReference`.
+- `nd.images.upload(key, file, { filename? })` for direct multipart upload
+  (Web `File`/`Blob` or Node `Buffer`). Charges 1 credit (`image_register`).
+- `nd.booking.getWidget(tenantId, serviceId)` — now takes **two** args. Read
+  `tenantId` once from `nd.projects.me()`.
+- `nd.projects.usage()` returns the current credit balance + per-operation
+  breakdown for the period.
+- `NeuralDraftClient.tenantsForEmail(email, { centralUrl? })` — STATIC
+  helper for the central-login workspace picker. No API key required;
+  always 200.
+
+**Added (MCP `@neuraldraft/mcp@0.3.0`)**
+
+- New tools: `get_brand`, `update_brand`, `get_content`, `list_content`,
+  `get_usage`, `list_blog_posts`, `find_workspaces`. See
+  [tools-and-resources](/mcp/tools-and-resources) for examples.
+- Env vars now use canonical `NEURALDRAFT_*` names
+  (`NEURALDRAFT_API_KEY`, `NEURALDRAFT_API_URL`, `NEURALDRAFT_PROJECT_ID`,
+  `NEURALDRAFT_DISPLAY_NAME`). The legacy `NEURAL_DRAFT_*` names still
+  resolve as aliases for backwards compatibility.
+
+**Added (central login)**
 
 - `GET /central/api/tenants-for-email?email=…` — returns every workspace a
   given email is registered against. Constant-time response; safe against

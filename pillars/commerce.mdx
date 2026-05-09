@@ -44,18 +44,35 @@ curl -X POST https://api.neuraldraft.io/v1/checkout-sessions \
 # => { "order_id": 902, "checkout_url": "https://checkout.stripe.com/c/pay/cs_live_..." }
 ```
 
-```ts Node
-import { NeuralDraft } from "@neuraldraft/sdk";
+```ts SDK
+import { NeuralDraftClient } from "@neuraldraft/sdk";
 
-const nd = new NeuralDraft({ apiKey: process.env.NEURAL_DRAFT_API_KEY! });
+const nd = new NeuralDraftClient({ apiKey: process.env.NEURALDRAFT_API_KEY! });
 
-const session = await nd.checkoutSessions.create({
-  items: [{ product_id: 42, variant_id: 88, quantity: 1 }],
-  customer: { name: "Ada Lovelace", email: "ada@example.com" },
+// List + read products through the SDK
+const { data: products } = await nd.products.list({
+  status: "active",
+  page_size: 50,
+});
+const hoodie = await nd.products.get("nd-hoodie");
+
+// Create / update / delete (admin-side)
+const created = await nd.products.create({
+  name: "Neural Draft hoodie",
+  slug: "nd-hoodie",
+  price: 4500, // minor units (cents)
+  currency: "gbp",
+  type: "physical",
+  status: "active",
+  track_inventory: true,
+  stock_quantity: 200,
+  images: ["https://cdn.example.com/hoodie.jpg"],
 });
 
-// Redirect the user
-return Response.redirect(session.checkout_url, 303);
+await nd.products.update(created.id, { stock_quantity: 195 });
+
+// Checkout sessions are not yet covered by the v0.3.0 SDK — call the REST
+// endpoint directly until they ship in a future release.
 ```
 
 </CodeGroup>
@@ -69,7 +86,7 @@ button, lands on Stripe-hosted onboarding, and returns when complete.
 
 ```bash
 curl -X POST https://api.neuraldraft.io/v1/connect/onboarding \
-  -H "Authorization: Bearer $NEURAL_DRAFT_API_KEY" \
+  -H "Authorization: Bearer $NEURALDRAFT_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
     "return_url": "https://example.com/admin/connected",
@@ -94,7 +111,7 @@ Cost: 250 credits per Connect account, per month — billed at month-end.
 
 ```bash
 curl -X POST https://api.neuraldraft.io/v1/products \
-  -H "Authorization: Bearer $NEURAL_DRAFT_API_KEY" \
+  -H "Authorization: Bearer $NEURALDRAFT_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
     "name": "Neural Draft hoodie",
@@ -117,7 +134,7 @@ currency.
 
 ```bash
 curl -X POST https://api.neuraldraft.io/v1/products/42/variants \
-  -H "Authorization: Bearer $NEURAL_DRAFT_API_KEY" \
+  -H "Authorization: Bearer $NEURALDRAFT_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
     "name": "Medium / Purple",
@@ -142,7 +159,7 @@ success. Works on any HTML page, any framework.
 
 ```bash
 curl -X POST https://api.neuraldraft.io/v1/webhook-endpoints \
-  -H "Authorization: Bearer $NEURAL_DRAFT_API_KEY" \
+  -H "Authorization: Bearer $NEURALDRAFT_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
     "url": "https://example.com/api/neural-draft",
@@ -159,7 +176,7 @@ tag the customer in your CRM.
 
 ```bash
 curl -X POST https://api.neuraldraft.io/v1/orders/902/refund \
-  -H "Authorization: Bearer $NEURAL_DRAFT_API_KEY" \
+  -H "Authorization: Bearer $NEURALDRAFT_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"amount":1500}'
 ```
@@ -173,7 +190,7 @@ Useful for in-person and over-the-phone sales that bypass Stripe Checkout.
 
 ```bash
 curl -X POST https://api.neuraldraft.io/v1/orders/manual \
-  -H "Authorization: Bearer $NEURAL_DRAFT_API_KEY" \
+  -H "Authorization: Bearer $NEURALDRAFT_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
     "items": [{ "product_id": 42, "quantity": 2 }],

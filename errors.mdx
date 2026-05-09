@@ -197,7 +197,7 @@ return the original response without re-executing the side effect.
 
 ```bash
 curl -X POST https://api.neuraldraft.io/v1/blog-posts \
-  -H "Authorization: Bearer $NEURAL_DRAFT_API_KEY" \
+  -H "Authorization: Bearer $NEURALDRAFT_API_KEY" \
   -H "Idempotency-Key: post-$(uuidgen)" \
   -H "Content-Type: application/json" \
   -d '{"title":"Hello","content":"<p>Hi</p>","language_code":"en"}'

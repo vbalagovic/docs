@@ -14,8 +14,8 @@ npm install @neuraldraft/sdk
 ```
 
 ```bash filename=".env"
-NEURAL_DRAFT_API_KEY=ndsk_live_...
-NEURAL_DRAFT_WEBHOOK_SECRET=whsec_...
+NEURALDRAFT_API_KEY=ndsk_live_...
+NEURALDRAFT_WEBHOOK_SECRET=whsec_...
 ```
 
 ## Runtime config
@@ -23,8 +23,8 @@ NEURAL_DRAFT_WEBHOOK_SECRET=whsec_...
 ```ts filename="nuxt.config.ts"
 export default defineNuxtConfig({
   runtimeConfig: {
-    neuralDraftApiKey: process.env.NEURAL_DRAFT_API_KEY,
-    neuralDraftWebhookSecret: process.env.NEURAL_DRAFT_WEBHOOK_SECRET,
+    neuralDraftApiKey: process.env.NEURALDRAFT_API_KEY,
+    neuralDraftWebhookSecret: process.env.NEURALDRAFT_WEBHOOK_SECRET,
     public: {
       neuralDraftPublicApiUrl: "https://api.neuraldraft.io/v1",
     },
@@ -38,12 +38,12 @@ Server-only — uses the secret API key. Importable from `~/server/api/*` and
 plugins.
 
 ```ts filename="server/utils/neural-draft.ts"
-import { NeuralDraft } from "@neuraldraft/sdk";
+import { NeuralDraftClient } from "@neuraldraft/sdk";
 import { createHmac, timingSafeEqual } from "node:crypto";
 
 export function getNeuralDraft(event?: any) {
   const config = useRuntimeConfig(event);
-  return new NeuralDraft({ apiKey: config.neuralDraftApiKey });
+  return new NeuralDraftClient({ apiKey: config.neuralDraftApiKey });
 }
 
 export function verifyNeuralDraftSignature(
@@ -78,7 +78,7 @@ export default defineEventHandler(async (event) => {
   const { data } = await nd.blogPosts.list({
     status: "published",
     lang: "en",
-    per_page: 50,
+    page_size: 50,
   });
   return data;
 });
@@ -127,7 +127,7 @@ export default defineEventHandler(async (event) => {
   if (!slug) throw createError({ statusCode: 404 });
 
   const nd = getNeuralDraft(event);
-  return await nd.blogPosts.bySlug(slug, { lang: "en" });
+  return await nd.blogPosts.get(slug, { lang: "en" });
 });
 ```
 
@@ -177,6 +177,20 @@ export function useNeuralDraftPublic() {
   };
 }
 ```
+
+## Hand this to your AI
+
+> _"Add a `/services` page that lists every active bookable service from
+> Neural Draft. In `server/api/services.get.ts`, call
+> `getNeuralDraft(event).booking.listServices({ status: 'active', page_size: 50 })`.
+> In the page component, render each service with `data-translate` keys
+> derived from its slug. For each service, also render the embed snippet
+> returned by `nd.booking.getWidget(tenantId, service.id)` — get
+> `tenantId` once from `nd.projects.me()`."_
+
+With [`@neuraldraft/mcp`](/mcp/setup) running, the AI will also call
+`register_component` for each section so the customer can edit copy
+inline in the admin.
 
 ## Notes
 

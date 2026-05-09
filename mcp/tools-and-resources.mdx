@@ -305,6 +305,104 @@ Two tiers — pick `budget` (default, Wan 2.1) for **40 credits** or
 }
 ```
 
+### `get_brand` / `update_brand`
+
+Read or patch the project's brand context as a tool, for clients that don't
+list MCP resources. `get_brand` is identical to the `brand://current`
+resource — read-only, free. `update_brand` accepts a partial patch (pass
+`null` on a field to clear it) and writes through `PATCH /v1/brand`.
+
+```json
+{
+  "name": "update_brand",
+  "input": {
+    "voice": "friendly_professional",
+    "audience": "indie founders building with AI tools",
+    "content_tone": "warm"
+  }
+}
+```
+
+Example prompt: _"Read the current brand context and tighten the voice to
+something punchier — under 40 words."_
+
+### `get_content` / `list_content`
+
+Lookups for translation keys. `get_content(key, lang?)` returns one value plus
+the full `all_locales` map; `list_content({ scope?, lang?, page_size? })`
+paginates the project's keys. Read-only, free.
+
+```json
+{ "name": "get_content", "input": { "key": "hero.headline", "lang": "en" } }
+```
+
+Example prompt: _"List the first 50 translation keys on this project, then
+tell me which ones still have empty French values."_
+
+### `get_usage`
+
+Read the project's current credit balance and per-operation breakdown for
+the active billing period. Wraps `GET /v1/projects/me/usage`. Read-only,
+free.
+
+```json
+{
+  "name": "get_usage",
+  "output": {
+    "credits_balance": 8420,
+    "credits_monthly_limit": 10000,
+    "period_start": "2026-05-01T00:00:00Z",
+    "period_end": "2026-05-31T23:59:59Z",
+    "breakdown": [
+      { "operation_type": "blog_post", "total_spent": 1200, "count": 20 },
+      { "operation_type": "image", "total_spent": 384, "count": 12 }
+    ]
+  }
+}
+```
+
+Example prompt: _"How much of my Neural Draft monthly budget have I burned
+so far this period? Break it down by operation."_
+
+### `list_blog_posts`
+
+Paginated read of the project's posts. Filter by `status`, `lang`,
+`category`, `tag`, plus `sort` (`created_at`, `published_at`, descending
+with `-`). Read-only, free.
+
+```json
+{
+  "name": "list_blog_posts",
+  "input": { "status": "draft", "page_size": 20, "sort": "-created_at" }
+}
+```
+
+Example prompt: _"List my most-recent draft posts so I can decide which to
+publish first."_
+
+### `find_workspaces`
+
+Look up the Neural Draft workspaces (tenants) registered against an email
+address. Hits the **central** host (e.g. `https://app.neuraldraft.io`),
+not the per-tenant API, and does NOT require an API key. Always returns
+200 (empty list for unknown emails — defeats enumeration). Free.
+
+```json
+{
+  "name": "find_workspaces",
+  "input": { "email": "ada@example.com" },
+  "output": {
+    "workspaces": [
+      { "id": 12, "name": "Acme", "domain": "acme.neuraldraft.io" },
+      { "id": 47, "name": "Acme staging", "domain": "acme-stg.neuraldraft.io" }
+    ]
+  }
+}
+```
+
+Example prompt: _"Help me find all my Neural Draft workspaces for this
+email address — I forgot which one I logged into last."_
+
 ### `list_newsletter_subscribers` / `list_contact_form_submissions`
 
 Read-only listings of the project's captured leads. Both support `page`,

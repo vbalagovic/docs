@@ -41,7 +41,7 @@ and commerce — never persist those domains to your own database.
 2. Every `<img>` gets `data-image-key="<key>"` and a real `alt`. The CMS
    resolves the URL at build time.
 3. Server-side reads use `@neuraldraft/sdk` with the env var
-   `NEURAL_DRAFT_API_KEY`. Never put the key in browser code.
+   `NEURALDRAFT_API_KEY`. Never put the key in browser code.
 4. Public reads from the browser (e.g. product catalogue) use the
    `/v1/public/*` endpoints with `?project_id=...` — never the authenticated
    endpoints.
@@ -129,3 +129,59 @@ complement each other.
 When the model thinks "where do I put the webhook handler?", it asks the
 project rules. When it thinks "what's the latest brand voice?", it queries
 `brand://current` via MCP. That's the split.
+
+## Working example — full SDK + MCP loop
+
+A complete, copy-paste working scaffold for a Next.js project — wired to
+SDK 0.3.0 and the Neural Draft MCP server.
+
+```ts filename="lib/neural-draft.ts"
+import { NeuralDraftClient } from "@neuraldraft/sdk";
+
+if (!process.env.NEURALDRAFT_API_KEY) {
+  throw new Error("Missing NEURALDRAFT_API_KEY");
+}
+
+export const nd = new NeuralDraftClient({
+  apiKey: process.env.NEURALDRAFT_API_KEY,
+});
+```
+
+```ts filename="app/page.tsx (server component)"
+import { nd } from "@/lib/neural-draft";
+
+export async function generateMetadata() {
+  const home = await nd.pages.get("home");
+  return {
+    title: home.meta_title ?? home.title,
+    description: home.meta_description ?? undefined,
+    openGraph: {
+      title: home.og_title ?? home.meta_title ?? home.title,
+      description: home.og_description ?? home.meta_description ?? undefined,
+      images: home.og_image ? [home.og_image] : undefined,
+    },
+    alternates: home.canonical_url ? { canonical: home.canonical_url } : undefined,
+  };
+}
+
+export default async function Home() {
+  const brand = await nd.brand.get();
+  return (
+    <main style={{ background: brand.colors?.primary?.hex }}>
+      <h1 data-translate="home.headline">Welcome</h1>
+      <p data-translate="home.subhead">Built with Neural Draft.</p>
+    </main>
+  );
+}
+```
+
+Now ask Claude Code (or Cursor with MCP enabled):
+
+> _"Read `brand://current` and `conventions://editable-html`. Generate a
+> three-tier pricing section with index-aware `data-translate` keys
+> (`pricing.tiers.0.name`, `.price`, `.description`, etc.). Then call
+> `register_component` with the rendered HTML and `intent='pricing tiers
+> for the home page'` so the customer can edit each tier in the admin."_
+
+The MCP server reads brand for you, returns conventions, and exposes
+`register_component` as a tool — the model wires the rest.

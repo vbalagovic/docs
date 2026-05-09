@@ -40,7 +40,7 @@ Slack/Discord, sync orders to your warehouse, or refresh a CDN cache.
 
     ```bash
     curl -X POST https://api.neuraldraft.io/v1/webhook-endpoints \
-      -H "Authorization: Bearer $NEURAL_DRAFT_API_KEY" \
+      -H "Authorization: Bearer $NEURALDRAFT_API_KEY" \
       -H "Content-Type: application/json" \
       -d '{
         "url": "https://example.com/api/neural-draft",
@@ -228,7 +228,7 @@ You can manually replay any past delivery from the dashboard or via the API:
 
 ```bash
 curl -X POST https://api.neuraldraft.io/v1/webhook-endpoints/whe_.../deliveries/whd_.../redeliver \
-  -H "Authorization: Bearer $NEURAL_DRAFT_API_KEY"
+  -H "Authorization: Bearer $NEURALDRAFT_API_KEY"
 ```
 
 The `data` payload is **always** the resource as it stood at delivery time

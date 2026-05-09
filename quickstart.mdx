@@ -43,18 +43,24 @@ tools that generate Neural Draft-native code without you teaching them.
     Now export it for the rest of this guide:
 
     ```bash
-    export NEURAL_DRAFT_API_KEY=ndsk_live_2NgcaXxFqLPo7K3vR8zHwT5sE9bM1nDc
+    export NEURALDRAFT_API_KEY=ndsk_live_2NgcaXxFqLPo7K3vR8zHwT5sE9bM1nDc
     ```
   </Step>
 
-  <Step title="Pick your client">
-    Every endpoint is a plain HTTP call — `fetch`, `axios`, `requests`, `cURL`,
-    Postman, anything. There's no required SDK.
+  <Step title="Install the SDK (recommended)">
+    Every endpoint is also a plain HTTP call — `fetch`, `axios`, `cURL` all
+    work — but the official TypeScript SDK gives you typed inputs, typed
+    responses, and a `jobs.poll()` helper for the async pipelines.
+
+    ```bash
+    npm install @neuraldraft/sdk
+    ```
 
     <Tip>
-      An official `@neuraldraft/sdk` (TypeScript), `neuraldraft` (Python) and
-      `neuraldraft/sdk` (PHP) are on the roadmap. Until they land, the snippets
-      below use built-in `fetch` — copy/paste straight into your codebase.
+      The SDK targets Node 20+, Bun, and modern browsers (server-side; never
+      ship the API key to the client). Python and PHP SDKs are on the roadmap —
+      until they land, use cURL or `requests` against the OpenAPI spec at
+      `https://api.neuraldraft.io/v1/openapi.yaml`.
     </Tip>
   </Step>
 
@@ -63,48 +69,44 @@ tools that generate Neural Draft-native code without you teaching them.
 
     <CodeGroup>
 
+    ```ts SDK
+    import { NeuralDraftClient } from "@neuraldraft/sdk";
+
+    const nd = new NeuralDraftClient({
+      apiKey: process.env.NEURALDRAFT_API_KEY!,
+    });
+
+    // Verify the key
+    const me = await nd.projects.me();
+    console.log(`Hello, ${me.name}`);
+
+    // Create a draft blog post
+    const post = await nd.blogPosts.create({
+      title: "Five things we shipped this week",
+      content: "<p>It was a busy week.</p>",
+      language_code: "en",
+      status: "draft",
+    });
+
+    console.log(`Draft created: /blog/${post.slug}`);
+    ```
+
     ```bash cURL
     # Verify the key
     curl https://api.neuraldraft.io/v1/projects/me \
-      -H "Authorization: Bearer $NEURAL_DRAFT_API_KEY"
+      -H "Authorization: Bearer $NEURALDRAFT_API_KEY"
 
-    # Create a draft blog post
+    # Create a draft blog post — note the discriminator: type=manual
     curl https://api.neuraldraft.io/v1/blog-posts \
-      -H "Authorization: Bearer $NEURAL_DRAFT_API_KEY" \
+      -H "Authorization: Bearer $NEURALDRAFT_API_KEY" \
       -H "Content-Type: application/json" \
       -d '{
+        "type": "manual",
         "title": "Five things we shipped this week",
         "content": "<p>It was a busy week.</p>",
         "language_code": "en",
         "status": "draft"
       }'
-    ```
-
-    ```ts Node (fetch)
-    const apiKey = process.env.NEURAL_DRAFT_API_KEY!;
-    const base = "https://api.neuraldraft.io/v1";
-    const headers = {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    };
-
-    // Verify the key
-    const me = await fetch(`${base}/projects/me`, { headers }).then(r => r.json());
-    console.log(`Hello, ${me.data.name}`);
-
-    // Create a draft blog post
-    const draft = await fetch(`${base}/blog-posts`, {
-      method: "POST",
-      headers,
-      body: JSON.stringify({
-        title: "Five things we shipped this week",
-        content: "<p>It was a busy week.</p>",
-        language_code: "en",
-        status: "draft",
-      }),
-    }).then(r => r.json());
-
-    console.log(`Draft created: /blog/${draft.data.slug}`);
     ```
 
     </CodeGroup>
@@ -139,7 +141,7 @@ tools that generate Neural Draft-native code without you teaching them.
     Add the MCP server to Claude Code in one command:
 
     ```bash
-    claude mcp add neural-draft --env NEURAL_DRAFT_API_KEY=$NEURAL_DRAFT_API_KEY -- npx -y @neuraldraft/mcp
+    claude mcp add neural-draft --env NEURALDRAFT_API_KEY=$NEURALDRAFT_API_KEY -- npx -y @neuraldraft/mcp
     ```
 
     Or paste the snippet into `.cursor/mcp.json` for Cursor:
@@ -150,7 +152,7 @@ tools that generate Neural Draft-native code without you teaching them.
         "neural-draft": {
           "command": "npx",
           "args": ["-y", "@neuraldraft/mcp"],
-          "env": { "NEURAL_DRAFT_API_KEY": "ndsk_live_..." }
+          "env": { "NEURALDRAFT_API_KEY": "ndsk_live_..." }
         }
       }
     }

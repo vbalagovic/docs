@@ -64,22 +64,12 @@ A live example: create a draft blog post, in English, with one cURL.
 
 <CodeGroup>
 
-```bash cURL
-curl https://api.neuraldraft.io/v1/blog-posts \
-  -H "Authorization: Bearer $NEURAL_DRAFT_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "title": "Hello, world",
-    "content": "<p>The first post.</p>",
-    "language_code": "en",
-    "status": "draft"
-  }'
-```
-
 ```ts Node
-import { NeuralDraft } from "@neuraldraft/sdk";
+import { NeuralDraftClient } from "@neuraldraft/sdk";
 
-const nd = new NeuralDraft({ apiKey: process.env.NEURAL_DRAFT_API_KEY! });
+const nd = new NeuralDraftClient({
+  apiKey: process.env.NEURALDRAFT_API_KEY!,
+});
 
 const post = await nd.blogPosts.create({
   title: "Hello, world",
@@ -91,32 +81,17 @@ const post = await nd.blogPosts.create({
 console.log(post.slug);
 ```
 
-```python Python
-import os, neuraldraft
-
-nd = neuraldraft.Client(api_key=os.environ["NEURAL_DRAFT_API_KEY"])
-
-post = nd.blog_posts.create(
-    title="Hello, world",
-    content="<p>The first post.</p>",
-    language_code="en",
-    status="draft",
-)
-
-print(post.slug)
-```
-
-```php PHP
-$nd = new NeuralDraft\Client(getenv('NEURAL_DRAFT_API_KEY'));
-
-$post = $nd->blogPosts->create([
-    'title' => 'Hello, world',
-    'content' => '<p>The first post.</p>',
-    'language_code' => 'en',
-    'status' => 'draft',
-]);
-
-echo $post->slug;
+```bash cURL
+curl https://api.neuraldraft.io/v1/blog-posts \
+  -H "Authorization: Bearer $NEURALDRAFT_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "type": "manual",
+    "title": "Hello, world",
+    "content": "<p>The first post.</p>",
+    "language_code": "en",
+    "status": "draft"
+  }'
 ```
 
 </CodeGroup>
@@ -129,7 +104,6 @@ Response (`201 Created`):
   "slug": "hello-world",
   "status": "draft",
   "title": "Hello, world",
-  "language_code": "en",
   "created_at": "2026-04-19T10:14:22Z"
 }
 ```
