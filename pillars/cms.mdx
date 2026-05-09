@@ -62,6 +62,15 @@ curl -X PUT https://api.neuraldraft.io/v1/content/hero.headline \
   -d '{"lang":"en","value":"Welcome to Acme"}'
 ```
 
+<Note>
+  **CMS writes cost 1 credit each.** `PUT /v1/content/{key}` (`content_update`),
+  `POST`/`PATCH /v1/pages` (`page_update`), and registering an image via URL
+  swap on `PUT /v1/images/{key}` or multipart upload on `POST /v1/images`
+  (`image_register`) each consume 1 credit on success. AI generation
+  (image, translation, blog, website) is metered separately at its own rate.
+  Reads (`GET`) remain free. See [pricing](/pricing-and-credits).
+</Note>
+
 ## Common workflows
 
 ### 1. Build-time fetch for SSG

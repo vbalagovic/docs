@@ -137,7 +137,7 @@ required scope; the response includes the scope you'd need.
 | ------ | ------------------- | -------------------------------------------------------------------- |
 | `401`  | `unauthorized`      | Missing, malformed, expired or revoked key.                          |
 | `403`  | `forbidden`         | Key is valid but lacks the required scope.                           |
-| `402`  | `out_of_credits`    | Project has 0 credits. Top up or upgrade.                            |
+| `402`  | `insufficient_credits` | Project balance too low for the operation. Top up or upgrade.     |
 | `429`  | `rate_limited`      | Per-project window exhausted. See `Retry-After`.                     |
 | `503`  | `service_unavailable` | Backend dependency down. Retry with backoff.                       |
 

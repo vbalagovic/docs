@@ -44,7 +44,7 @@ the first thing we'll ask for.
 | ----- | ----------------------- | ---------------------------------------------------------------------------------- | ----------------------------------- |
 | `400` | `bad_request`           | Malformed request — invalid JSON, missing required body field, wrong method.       | No. Fix the request.                |
 | `401` | `unauthorized`          | Missing, malformed, expired, or revoked API key.                                   | No. Re-issue the key.               |
-| `402` | `out_of_credits`        | Project balance is zero. Top up or upgrade.                                        | No, until credits are added.        |
+| `402` | `insufficient_credits`  | Project balance is too low to cover the operation. Top up or upgrade.              | No, until credits are added.        |
 | `403` | `forbidden`             | Key is valid but lacks the required scope.                                         | No. Re-issue with the missing scope.|
 | `404` | `not_found`             | Resource does not exist (or your key can't see it).                                | No.                                 |
 | `409` | `conflict`              | Generic conflict — e.g. slug already taken, key limit reached.                     | Sometimes. Read `detail`.           |
@@ -57,21 +57,29 @@ the first thing we'll ask for.
 | `502` | `upstream_unavailable`  | Upstream AI provider error (model, image gen, etc.). Often transient.              | Yes — exponential backoff.          |
 | `503` | `service_unavailable`   | Maintenance or transient outage. Honour `Retry-After`.                             | Yes — exponential backoff.          |
 
-### `out_of_credits`
+### `insufficient_credits`
 
-The most common failure for active projects. The response includes the credit
-delta required:
+The most common failure for active projects. Returned whenever a write or
+generation costs more credits than the project has on hand. The body
+includes `cost` (credits the operation needs) and `balance` (credits the
+project had on hand) so clients can render an exact top-up prompt:
 
 ```json
 {
-  "type": "https://api.neuraldraft.io/errors/out_of_credits",
-  "title": "Out of credits",
+  "type": "https://neuraldraft.com/errors/payment-required",
+  "title": "Payment Required",
   "status": 402,
-  "code": "out_of_credits",
-  "detail": "This operation requires 400 credits but the project balance is 12. Top up or upgrade your plan.",
+  "code": "insufficient_credits",
+  "detail": "This operation requires 1 credit but the project balance is 0. Top up or upgrade your plan.",
+  "cost": 1,
+  "balance": 0,
   "instance": "req_2Nh4PqRsTuVw"
 }
 ```
+
+Every mutating write returns this shape on a broke project — including the
+1-credit operations (`content_update`, `page_update`, `image_register`) as
+well as the larger generations (image, blog, video, website).
 
 Subscribe to the `project.credits_low` webhook (fired at 20% remaining) and
 the `project.credits_exhausted` event (fired the moment the first 402 fires) —

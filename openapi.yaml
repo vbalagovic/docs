@@ -32,9 +32,14 @@ info:
     Most operations cost credits. Costs are documented per endpoint in this
     spec and on the [pricing page](https://neuraldraft.io/pricing). When a
     project has no credits left, every credit-consuming operation returns
-    `402 Payment Required` with `code: out_of_credits`.
+    `402 Payment Required` with `code: insufficient_credits`. The response
+    includes `cost` (credits the operation needed) and `balance` (credits the
+    project had on hand) so clients can render an exact top-up prompt.
 
-    Read-only endpoints (`GET`) do not consume credits unless explicitly noted.
+    Read-only endpoints (`GET`) do not consume credits. Mutating writes —
+    upserting a content key, creating or updating a page, registering an
+    image (URL swap or multipart upload) — cost **1 credit** each on top of
+    the AI-generation costs documented per endpoint.
 
     ## Rate limits
 
@@ -986,6 +991,8 @@ paths:
         not exist, it is created. If `lang` is omitted, the project's default
         language is used.
 
+        Costs **1 credit** per successful upsert (`content_update`).
+
         Fires a `content.changed` webhook event to subscribers.
       operationId: putContentKey
       requestBody:
@@ -1012,6 +1019,7 @@ paths:
                 $ref: "#/components/schemas/ContentValue"
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "402": { $ref: "#/components/responses/PaymentRequired" }
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
       x-codeSamples:
         - lang: curl
@@ -1500,7 +1508,7 @@ paths:
         Create a `TenantPage` with optional SEO meta. Promoting a page to
         homepage demotes any previously-homepage page.
 
-        **Free** — does not consume credits.
+        Costs **1 credit** per successful create (`page_update`).
       operationId: createPage
       security:
         - apiKeyAuth: []
@@ -1518,6 +1526,7 @@ paths:
                 type: object
                 properties:
                   data: { $ref: '#/components/schemas/Page' }
+        '402': { $ref: "#/components/responses/PaymentRequired" }
         '409':
           description: A page with that slug already exists.
   /pages/{id_or_slug}:
@@ -1550,6 +1559,8 @@ paths:
         Only fields you pass are overwritten — meta keys you omit are
         preserved. Pass an explicit `null` to clear a meta field. Path
         parameter must be the numeric id (not slug) for this endpoint.
+
+        Costs **1 credit** per successful update (`page_update`).
       operationId: updatePage
       security:
         - apiKeyAuth: []
@@ -1572,6 +1583,7 @@ paths:
                 type: object
                 properties:
                   data: { $ref: '#/components/schemas/Page' }
+        '402': { $ref: "#/components/responses/PaymentRequired" }
         '404':
           description: Page not found.
         '409':
@@ -1649,8 +1661,7 @@ paths:
                 type: object
                 properties:
                   data: { $ref: '#/components/schemas/Job' }
-        '402':
-          description: Insufficient credits.
+        '402': { $ref: "#/components/responses/PaymentRequired" }
   /images:
     get:
       tags: [Images]
@@ -1715,7 +1726,8 @@ paths:
         2. **Direct upload** (`multipart/form-data`) — synchronous swap with
            the uploaded file bytes. `file` and `key` are required. Returns the
            registered [`Image`](#/components/schemas/Image) immediately. Costs
-           **0 credits**. Max 10MB; jpg/jpeg/png/webp/gif/svg only.
+           **1 credit** (`image_register`). Max 10MB;
+           jpg/jpeg/png/webp/gif/svg only.
       operationId: createImage
       requestBody:
         required: true
@@ -1871,10 +1883,12 @@ paths:
         Three replacement modes:
 
         1. **Upload** — `multipart/form-data` with a `file` part. Synchronous;
-           returns the updated [`Image`](#/components/schemas/Image). 0 credits.
-           Max 10MB; jpg/jpeg/png/webp/gif/svg only.
+           returns the updated [`Image`](#/components/schemas/Image).
+           **1 credit** (`image_register`). Max 10MB;
+           jpg/jpeg/png/webp/gif/svg only.
         2. **Direct URL** — `application/json` with `{ url }`. Synchronous;
-           returns the updated [`Image`](#/components/schemas/Image). 0 credits.
+           returns the updated [`Image`](#/components/schemas/Image).
+           **1 credit** (`image_register`).
         3. **Regenerate** — `application/json` with `{ regenerate: true, prompt, ... }`.
            Returns a [`Job`](#tag/Jobs) and replaces the image when complete.
            **40 credits**.
@@ -7167,11 +7181,24 @@ components:
           type: string
           description: |
             Stable machine error code. Standard values:
-            `bad_request`, `unauthorized`, `out_of_credits`, `forbidden`,
-            `not_found`, `conflict`, `validation_failed`, `rate_limited`,
-            `internal_error`, `service_unavailable`, `slot_unavailable`,
-            `connect_not_ready`, `upstream_unavailable`, `idempotency_conflict`.
+            `bad_request`, `unauthorized`, `insufficient_credits`,
+            `forbidden`, `not_found`, `conflict`, `validation_failed`,
+            `rate_limited`, `internal_error`, `service_unavailable`,
+            `slot_unavailable`, `connect_not_ready`, `upstream_unavailable`,
+            `idempotency_conflict`.
           example: validation_failed
+        cost:
+          type: integer
+          description: |
+            Credits the operation requires. Only present on
+            `402 insufficient_credits` responses.
+          example: 1
+        balance:
+          type: integer
+          description: |
+            Credits the project had on hand at the time of the request.
+            Only present on `402 insufficient_credits` responses.
+          example: 0
         errors:
           type: object
           description: Field-level validation errors (only on 422).
@@ -7267,10 +7294,11 @@ components:
                 instance: req_2Nh4PqRsTuVw
     PaymentRequired:
       description: |
-        Out of credits. The project has zero credits remaining for the
-        current billing period and the operation requested costs at least 1
-        credit. Top up at `/projects/me/usage` or wait for the next period
-        to start.
+        Insufficient credits. The project does not have enough credits to
+        cover the operation. The body includes `cost` (credits the operation
+        needs) and `balance` (credits the project had on hand) so clients
+        can render an exact top-up prompt. Top up at `/projects/me/usage`
+        or wait for the next period to start.
       headers:
         X-Request-Id: { schema: { type: string } }
       content:
@@ -7279,11 +7307,13 @@ components:
           examples:
             broke:
               value:
-                type: https://api.neuraldraft.io/errors/out_of_credits
-                title: Out of credits
+                type: https://neuraldraft.com/errors/payment-required
+                title: Payment Required
                 status: 402
                 detail: This project has no credits remaining for the current period.
-                code: out_of_credits
+                code: insufficient_credits
+                cost: 1
+                balance: 0
                 instance: req_2Nh4PqRsTuVw
     Forbidden:
       description: API key lacks required scope.

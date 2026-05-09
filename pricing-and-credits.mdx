@@ -12,8 +12,8 @@ only the cost-per-credit differs.
 <Note>
   **Hard stop at zero credits.** When your balance hits zero, every
   credit-consuming operation returns
-  [`402 out_of_credits`](/errors#out-of-credits). Read-only endpoints continue
-  to work. No overage. No invoice surprises.
+  [`402 insufficient_credits`](/errors#insufficient-credits). Read-only
+  endpoints continue to work. No overage. No invoice surprises.
 </Note>
 
 ## What every operation costs
@@ -21,6 +21,9 @@ only the cost-per-credit differs.
 | Operation                                          | Credits |
 | -------------------------------------------------- | ------: |
 | Chat message                                       |       1 |
+| Content update (`PUT /v1/content/{key}`)           |       1 |
+| Page create or update (`POST`/`PATCH /v1/pages`)   |       1 |
+| Image register (URL swap or multipart upload)      |       1 |
 | Page edit (inline AI tweak)                        |       2 |
 | Social post — text only                            |       5 |
 | Translate (per target language)                    |       7 |
@@ -49,9 +52,12 @@ only the cost-per-credit differs.
   `402 plan_required` if they ask for premium.
 </Note>
 
-Read-only endpoints (`GET`) and lightweight writes (e.g. updating a draft,
-attaching a tag, scheduling a post, registering a component, creating a page,
-upserting a content key) do not consume credits.
+Read-only endpoints (`GET`) and a handful of lightweight writes (e.g.
+updating a draft, attaching a tag, scheduling a post, registering a
+component) do not consume credits. Mutating writes through the public API —
+`PUT /v1/content/{key}`, `POST`/`PATCH /v1/pages`, and `image_register`
+(URL swap on `PUT /v1/images/{key}` or multipart upload on `POST /v1/images`) —
+each cost 1 credit, charged on the successful write.
 
 <Note>
   **Social post media surcharge.** `POST /v1/social-posts` with `type=ai`
@@ -118,7 +124,7 @@ Free-tier projects also surface a small "Built with Neural Draft" badge in
 embedded widgets and on platform-rendered pages — turning that off requires a
 paid tier.
 
-Hit zero and the API returns `402 out_of_credits` until next month — no
+Hit zero and the API returns `402 insufficient_credits` until next month — no
 surprise bills. Top up with a one-time pack or upgrade to a paid tier
 whenever you're ready.
 
@@ -181,8 +187,9 @@ Predictable, in plain words:
   <Accordion title="What if I run out mid-job?">
     Async jobs (blog generation, batch translation, etc.) reserve credits when
     queued. If your balance is too low at queue time, the request returns
-    `402 out_of_credits` immediately — nothing is started. Reserved credits are
-    refunded if the job fails for our reasons (e.g. upstream timeout).
+    `402 insufficient_credits` immediately — nothing is started. Reserved
+    credits are refunded if the job fails for our reasons (e.g. upstream
+    timeout).
   </Accordion>
 
   <Accordion title="Can I get a refund?">
