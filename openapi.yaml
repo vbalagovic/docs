@@ -127,6 +127,11 @@ tags:
     description: |
       Editable HTML chunks registered by AI codegen tools during a build session.
       A registered component becomes editable in the project's admin UI.
+  - name: Pages
+    description: |
+      Multi-page authoring with per-page SEO meta (meta_title, meta_description,
+      og_*, canonical_url). Pages live alongside the components that render
+      them.
   - name: Images
     description: Brand-consistent image generation, replacement, and resolution by key.
   - name: Blog
@@ -164,7 +169,7 @@ x-tagGroups:
   - name: Getting started
     tags: [Health, Projects, Brand]
   - name: CMS
-    tags: [Content, Components, Images, Forms]
+    tags: [Content, Components, Pages, Images, Forms]
   - name: Content marketing
     tags: [Blog, Social]
   - name: Operations

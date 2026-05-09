@@ -157,6 +157,99 @@ The two attributes the AI uses everywhere:
 Keys are case-sensitive, dot-namespaced, and lowercase by convention. Index
 keys for arrays follow `section.field.0.subfield`.
 
+## Per-page SEO meta
+
+Search engines and social cards need per-route metadata — `<title>`,
+`<meta name=description>`, and the `og:*` tags. Neural Draft stores this
+on the page itself so each route can have its own values without polluting
+the translation-key namespace.
+
+There are two surfaces depending on what kind of content you're rendering:
+
+### CMS-managed pages — `GET /v1/pages/{slug}`
+
+For everything that isn't a blog post (homepage, about, services, legal,
+landing pages…), fetch the `Page` resource at build time and use the meta
+fields directly. Every field is nullable; an empty `meta_title` means the
+page `title` is used as the document title.
+
+<CodeGroup>
+
+```bash cURL
+curl https://api.neuraldraft.io/v1/pages/about \
+  -H "Authorization: Bearer $NEURAL_DRAFT_API_KEY"
+```
+
+```ts Node (SDK)
+import { NeuralDraftClient } from "@neuraldraft/sdk";
+
+const nd = new NeuralDraftClient({ apiKey: process.env.NEURAL_DRAFT_API_KEY! });
+
+const page = await nd.pages.get("about");
+// =>
+// {
+//   id: 42,
+//   slug: "about",
+//   title: "About us",
+//   meta_title: "About — Acme",
+//   meta_description: "We build software that scales.",
+//   og_image: "https://cdn.example.com/og/about.jpg",
+//   canonical_url: null,
+//   ...
+// }
+```
+
+</CodeGroup>
+
+Use `nd.pages.update(id, { meta_title: null })` (or pass `null` via cURL)
+to clear a single meta field. Untouched fields are preserved — the API
+merges the patch into the existing record.
+
+### Blog posts — `GET /v1/blog-posts/{slug}`
+
+Posts have their own per-translation meta. The locale-aware response picks
+the matching translation for `meta_title` / `meta_description`. Use
+`featured_image` for `og:image` (it's the canonical image associated with
+the post).
+
+<CodeGroup>
+
+```bash cURL
+curl "https://api.neuraldraft.io/v1/blog-posts/5-minute-breathwork-for-anxious-mornings?lang=en" \
+  -H "Authorization: Bearer $NEURAL_DRAFT_API_KEY"
+```
+
+```ts Node (SDK)
+const post = await nd.blogPosts.get("5-minute-breathwork-for-anxious-mornings", { lang: "en" });
+// post.meta_title, post.meta_description, post.featured_image
+```
+
+</CodeGroup>
+
+To patch SEO meta on a post (e.g. tighten the description after publish):
+
+```ts
+await nd.blogPosts.update(post.id, {
+  meta_title: "5-minute breathwork — Acme blog",
+  meta_description: "A 5-minute morning routine to take the edge off anxiety.",
+});
+```
+
+### Where to put what in your `<head>`
+
+```html
+<title>{page.meta_title ?? page.title}</title>
+<meta name="description" content={page.meta_description ?? ""} />
+<meta property="og:title" content={page.og_title ?? page.meta_title ?? page.title} />
+<meta property="og:description" content={page.og_description ?? page.meta_description ?? ""} />
+<meta property="og:image" content={page.og_image ?? defaultOgImage} />
+{page.canonical_url && <link rel="canonical" href={page.canonical_url} />}
+{page.exclude_from_search && <meta name="robots" content="noindex" />}
+```
+
+For a blog post the same template applies, swapping `page.og_image` with
+`post.featured_image`.
+
 ## Reference
 
 | Endpoint                                       | Tag       |
@@ -168,6 +261,11 @@ keys for arrays follow `section.field.0.subfield`.
 | `POST /v1/content/{key}/translate`             | [Content](/api-reference#tag/Content)    |
 | `POST /v1/components/register`                 | [Components](/api-reference#tag/Components) |
 | `GET /v1/components`                           | [Components](/api-reference#tag/Components) |
+| `GET /v1/pages`                                | [Pages](/api-reference#tag/Pages)           |
+| `GET /v1/pages/{idOrSlug}`                     | [Pages](/api-reference#tag/Pages)           |
+| `POST /v1/pages`                               | [Pages](/api-reference#tag/Pages)           |
+| `PATCH /v1/pages/{id}`                         | [Pages](/api-reference#tag/Pages)           |
+| `DELETE /v1/pages/{id}`                        | [Pages](/api-reference#tag/Pages)           |
 | `GET /v1/brand`                                | [Brand](/api-reference#tag/Brand)        |
 | `PATCH /v1/brand`                              | [Brand](/api-reference#tag/Brand)        |
 | `POST /v1/images/upload`                       | [Images](/api-reference#tag/Images)      |
