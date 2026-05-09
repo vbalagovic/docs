@@ -277,8 +277,11 @@ For a blog post the same template applies, swapping `page.og_image` with
 | `DELETE /v1/pages/{id}`                        | [Pages](/api-reference#tag/Pages)           |
 | `GET /v1/brand`                                | [Brand](/api-reference#tag/Brand)        |
 | `PATCH /v1/brand`                              | [Brand](/api-reference#tag/Brand)        |
-| `POST /v1/images/upload`                       | [Images](/api-reference#tag/Images)      |
-| `POST /v1/images/generate`                     | [Images](/api-reference#tag/Images)      |
+| `GET /v1/images`                               | [Images](/api-reference#tag/Images)      |
+| `GET /v1/images/{key}`                         | [Images](/api-reference#tag/Images)      |
+| `POST /v1/images` (AI generate or multipart upload) | [Images](/api-reference#tag/Images) |
+| `PUT /v1/images/{key}` (multipart, URL swap, or regenerate) | [Images](/api-reference#tag/Images) |
+| `DELETE /v1/images/{key}`                      | [Images](/api-reference#tag/Images)      |
 | `POST /v1/newsletters/subscribe` (public)      | [Forms](/api-reference#tag/Forms)        |
 | `GET /v1/newsletters`                          | [Forms](/api-reference#tag/Forms)        |
 | `DELETE /v1/newsletters/{id}`                  | [Forms](/api-reference#tag/Forms)        |
@@ -320,13 +323,15 @@ curl -X POST https://api.neuraldraft.io/v1/contact-forms \
   }'
 ```
 
-### Webhook events
+### Reading submissions
 
-Both submits fire webhook events through the standard fan-out so you can pipe
-them into Slack, a CRM, or your own automation:
-
-- `newsletter.subscribed` — `{ id, email, app_lead, subscribed_at }`
-- `contact_form.submitted` — `{ id, email, subject, message, data, submitted_at }`
+Form submissions are not in the outgoing-webhook event whitelist today —
+poll the admin list endpoints (`GET /v1/newsletters`, `GET /v1/contact-forms`)
+or use the MCP tools `list_newsletter_subscribers` /
+`list_contact_form_submissions` to inspect what came in. We may add
+`newsletter.subscribed` / `contact_form.submitted` topics to the webhook
+whitelist in a future release; subscribe to the [changelog](/changelog) if
+you'd like to be notified.
 
 ### Admin list & delete
 

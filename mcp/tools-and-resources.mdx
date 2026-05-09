@@ -177,7 +177,7 @@ Kick off the full blog generation pipeline. Returns a job id; poll or stream.
   "output": {
     "job_id": "job_2NgcaXxFqLPo",
     "status_url": "https://api.neuraldraft.io/v1/jobs/job_2NgcaXxFqLPo",
-    "estimated_credits": 400
+    "estimated_credits": 60
   }
 }
 ```
@@ -320,9 +320,10 @@ filter trial leads from real subscribers.
 ```
 
 Submissions are written to the project from the **public** v1 endpoints
-(`POST /v1/newsletters/subscribe`, `POST /v1/contact-forms`) which fire
-`newsletter.subscribed` / `contact_form.submitted` webhook events. These
-tools don't write — they're for the AI to inspect what came in.
+(`POST /v1/newsletters/subscribe`, `POST /v1/contact-forms`). Form-submit
+topics are not currently in the outgoing-webhook event whitelist — poll
+these list endpoints (or the matching v1 admin endpoints) to inspect what
+came in. These tools are read-only.
 
 ## Prompts (slash commands)
 

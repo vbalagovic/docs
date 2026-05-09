@@ -71,7 +71,10 @@ await nd.socialPosts.schedule(post.result.social_post_id, {
 
 </CodeGroup>
 
-Cost: **25 credits per platform** for generation. Scheduling is free.
+Cost: **5 credits** (`social_post`) for the text base, regardless of how
+many platforms you fan out to in a single call. If `media_type=image` is
+set an extra **32 credits** (`image`) is charged; `media_type=video`
+charges an extra **40 credits** (`video`, budget tier). Scheduling is free.
 
 ## Common workflows
 

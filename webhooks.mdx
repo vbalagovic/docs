@@ -260,9 +260,9 @@ The `data` payload is **always** the resource as it stood at delivery time
   </Accordion>
 
   <Accordion title="Monitor failures">
-    Subscribe a `webhook.delivery_failed` event to your alerting; or watch the
-    `last_delivery_status` field on the endpoint resource. A `failed` state for
-    more than an hour is your cue to investigate.
+    Watch the `last_delivery_status` field on the endpoint resource (also
+    visible in the dashboard's delivery log). A `failed` state for more than
+    an hour is your cue to investigate.
   </Accordion>
 
   <Accordion title="Use one endpoint per concern">

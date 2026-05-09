@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Neural Draft Project API
-  version: "1.0.0"
+  version: "1.0.1"
   summary: The AI-native backend platform for Lovable / Claude / v0 / Bolt-built sites.
   description: |
     The **Neural Draft Project API** is the single REST contract every AI-built
@@ -449,24 +449,24 @@ paths:
                     plan: hobby
                     plan_credits: 5000
                     topup_credits: 2000
-                    credits_used: 3260
-                    credits_remaining: 3740
+                    credits_used: 1295
+                    credits_remaining: 5705
                     breakdown:
-                      - op: blog_post.generate
-                        count: 4
-                        credits: 1600
-                      - op: social_post.generate
+                      - op: blog_post
+                        count: 8
+                        credits: 480
+                      - op: social_post
                         count: 32
-                        credits: 800
-                      - op: image.generate
-                        count: 18
-                        credits: 720
-                      - op: chat.message
-                        count: 9
-                        credits: 135
-                      - op: storage.gb_month
-                        count: 0.4
-                        credits: 6
+                        credits: 160
+                      - op: image
+                        count: 15
+                        credits: 480
+                      - op: translate_language
+                        count: 12
+                        credits: 84
+                      - op: chat_message
+                        count: 91
+                        credits: 91
         "401": { $ref: "#/components/responses/Unauthorized" }
       x-codeSamples:
         - lang: curl
@@ -1097,7 +1097,7 @@ paths:
         Returns a [`Job`](#tag/Jobs) with `type: translation.batch`. Poll
         `GET /jobs/{id}` or stream `/jobs/{id}/stream` for progress.
 
-        Costs **70 credits per target language**. See [pricing](https://neuraldraft.io/pricing).
+        Costs **7 credits per target language**. See [pricing](https://neuraldraft.io/pricing).
       operationId: translateContentKey
       requestBody:
         required: true
@@ -1613,8 +1613,11 @@ paths:
       tags: [Videos]
       summary: Generate a premium video clip
       description: |
-        Kicks off a premium short-form video generation (Kling v2.1 /
-        Runway Gen4). Charges **100 credits** per call. Returns a
+        Kicks off a short-form video generation. Two tiers — pick `tier=budget`
+        (default, Wan 2.1) for **40 credits** (`video`) or `tier=premium`
+        (Kling v2.1 / Runway Gen4) for **300 credits** (`video_premium`).
+        Premium requires a **Build** plan or higher; Free / Hobby projects
+        calling with `tier=premium` get `402 plan_required`. Returns a
         [`Job`](#tag/Jobs) with `type: video.generate`; poll
         `GET /jobs/{id}` for completion.
       operationId: generateVideo
@@ -1667,8 +1670,9 @@ paths:
       tags: [Images]
       summary: List registered images
       description: |
-        Paginated list of image keys registered for the project (e.g. via
-        `register_image`, `generate_image`, or multipart upload). Optional
+        Paginated list of image keys registered for the project (via
+        AI generation or multipart upload through `POST /v1/images`, or via
+        URL swap / regenerate through `PUT /v1/images/{key}`). Optional
         `prefix` narrows by user-key prefix. Read-only. Does not consume credits.
       operationId: listImages
       parameters:
@@ -1722,7 +1726,7 @@ paths:
         1. **AI generation** (`application/json`) — kicks off async generation
            inheriting the project's brand context. Returns a [`Job`](#tag/Jobs)
            with `type: image.generate`. On completion, `result` contains
-           `{ url, key, width, height }`. Costs **40 credits**.
+           `{ url, key, width, height }`. Costs **32 credits** (`image`).
         2. **Direct upload** (`multipart/form-data`) — synchronous swap with
            the uploaded file bytes. `file` and `key` are required. Returns the
            registered [`Image`](#/components/schemas/Image) immediately. Costs
@@ -1891,7 +1895,7 @@ paths:
            **1 credit** (`image_register`).
         3. **Regenerate** — `application/json` with `{ regenerate: true, prompt, ... }`.
            Returns a [`Job`](#tag/Jobs) and replaces the image when complete.
-           **40 credits**.
+           **32 credits** (`image`).
       operationId: replaceImage
       requestBody:
         required: true
@@ -2126,8 +2130,9 @@ paths:
         2. **AI generation** — provide `ai: { topic, style?, word_count?,
            translate_to_all?, primary_keyword?, ... }`. Returns a
            [`Job`](#tag/Jobs) with `type: blog_post.generate`. The post
-           appears in the database when the job completes. Costs **400 credits**
-           (full pipeline: research → write → image → translate → SEO).
+           appears in the database when the job completes. Costs **60 credits**
+           (`blog_post` — covers research, draft, and featured image; per-language
+           translations are billed separately at **7 credits per language**).
       operationId: createBlogPost
       requestBody:
         required: true
@@ -2491,7 +2496,7 @@ paths:
         [`Job`](#tag/Jobs) with `type: translation.batch`. On completion, the
         post's `translations[]` array contains the new locales.
 
-        Costs **70 credits per target language**.
+        Costs **7 credits per target language** (`translate_language`).
       operationId: translateBlogPost
       requestBody:
         required: true
@@ -2923,8 +2928,10 @@ paths:
            (`facebook_content`, `instagram_content`, …). Saved as draft. 0 credits.
         2. **AI generation** — provide `ai: { topic|post_id, tone, platforms,
            media_type, ... }`. Returns a [`Job`](#tag/Jobs) with
-           `type: social_post.generate`. Costs **25 credits per platform**
-           (so a post for 3 platforms costs 75 credits).
+           `type: social_post.generate`. Costs **5 credits** (`social_post`) for
+           the text base; if `media_type=image` an additional **32 credits**
+           (`image`) is charged, and if `media_type=video` an additional
+           **40 credits** (`video`, budget tier) is charged against the same job.
       operationId: createSocialPost
       requestBody:
         required: true

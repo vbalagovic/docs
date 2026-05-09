@@ -157,8 +157,8 @@ curl https://api.neuraldraft.io/v1/projects/me/usage \
 
 A few patterns we've seen work well:
 
-- **Soft alerts**: subscribe to the `project.credits_low` webhook event and
-  Slack the team at 20% remaining.
+- **Soft alerts**: poll `GET /v1/projects/me/usage` and Slack the team
+  when `credits_remaining` drops below 20% of the included allowance.
 - **Per-customer cost tracking**: tag your own end-customers in
   `metadata.customer_id` on async jobs; the dashboard exports a CSV grouped by
   metadata.

@@ -5,7 +5,44 @@ description: "Reverse-chronological release notes. Breaking changes are tagged `
 
 We follow [SemVer](https://semver.org/) on the `/v1/*` surface. Breaking
 changes are versioned and announced 90 days in advance. Subscribe to the RSS
-feed or the `release.shipped` webhook for automated notifications.
+feed for automated notifications.
+
+## 2026-05-09 — Central login workspace picker + docs alignment
+
+**Added**
+
+- `GET /central/api/tenants-for-email?email=…` — returns every workspace a
+  given email is registered against. Constant-time response; safe against
+  enumeration. Powers a "Pick your workspace" dropdown on the central
+  login form.
+- `POST /central/api/login` now accepts an optional `tenant_id` to
+  disambiguate when an email is registered to multiple workspaces. Without
+  it, the server iterates candidates and uses the first whose password
+  verifies. Documented in
+  [authentication](/authentication#central-login-multi-workspace-accounts).
+
+**Fixed (docs)**
+
+- Page meta field names corrected throughout the docs and OpenAPI:
+  `meta_title`, `meta_description`, `og_title`, `og_description`,
+  `og_image`, `canonical_url`. (`seo_title` / `seo_description` were
+  never accepted by the API; any guides referencing them are now in sync
+  with the real `PageController` validation rules.)
+- Removed the hallucinated "register a remote URL" mode from
+  `POST /v1/images`. The real endpoint accepts either AI generation
+  (`{ prompt }` JSON) or a multipart file upload. URL swaps go through
+  `PUT /v1/images/{key}` with `{ url }`.
+- Webhook event whitelist trimmed to the actual server-side allow-list
+  (`blog_post.published`, `blog_post.translated`, `social_post.published`,
+  `social_post.failed`, `order.*`, `booking.*`, `content.changed`,
+  `image.generated`, `connect.account_updated`). `newsletter.subscribed`
+  and `contact_form.submitted` are NOT in the whitelist today — poll the
+  admin list endpoints (or the MCP tools) to inspect submissions.
+- Credit costs aligned with `config/subscriptions.php`: `blog_post` is 60
+  (not 400), `translate_language` is 7 per language (not 70), `social_post`
+  is 5 + image/video media surcharge (not 25/platform), budget `video`
+  is 40 and premium `video_premium` is 300 (not flat 100). `image_register`,
+  `content_update`, and `page_update` are 1 credit each.
 
 ## 2026-05-08 — SDK and central admin
 
@@ -81,8 +118,5 @@ The v1 Project API is generally available.
 ## How to subscribe
 
 - **RSS**: `https://docs.neuraldraft.io/changelog/feed.xml`
-- **Webhook**: subscribe `release.shipped` on `/v1/webhook-endpoints`. Each
-  event includes a link to the relevant changelog entry and a flag for
-  whether it's breaking.
 - **Status page**: [`status.neuraldraft.io`](https://status.neuraldraft.io)
   for incidents and planned maintenance.

@@ -213,6 +213,72 @@ separation and friction-free rotation:
 A 21st create attempt returns `409 Conflict` with `code: "key_limit_reached"` —
 revoke an unused one first.
 
+## Central login (multi-workspace accounts)
+
+If a single email is registered against more than one project (common for
+agencies and people running multiple sandboxes), the central login flow at
+[`app.neuraldraft.io`](https://app.neuraldraft.io) needs to know **which
+workspace** to drop the user into. Two endpoints power this — both live on
+the central host (`app.<central_domain>`), neither is a per-tenant API
+surface, and **neither uses an API key**: they're for the dashboard /
+admin SPA, not for server-to-server traffic.
+
+<Note>
+  The v1 Project API documented above is unchanged — these endpoints are a
+  separate auth path the dashboard uses to issue Sanctum tokens. Skip this
+  section if you're only consuming `/v1/*`.
+</Note>
+
+### `GET /central/api/tenants-for-email`
+
+Returns every workspace the email is registered against. Always 200; the
+response is constant-time across known/unknown emails to defeat
+enumeration. An unknown email returns `{ tenants: [] }`.
+
+```bash
+curl "https://app.neuraldraft.io/central/api/tenants-for-email?email=jane@example.com"
+```
+
+```json
+{
+  "tenants": [
+    { "id": 42, "name": "Acme",        "domain": "acme.neuraldraft.io" },
+    { "id": 87, "name": "Acme Studio", "domain": "studio.neuraldraft.io" }
+  ]
+}
+```
+
+If `tenants.length > 1`, render a workspace picker; otherwise log straight in.
+
+### `POST /central/api/login`
+
+Email + password authentication that issues a Sanctum token. The optional
+`tenant_id` disambiguates when the email is registered to multiple
+workspaces — pass it whenever the picker has a selection so iteration
+across candidates can't pick the wrong one (e.g. password rotated on one
+tenant but a stale row still points at another).
+
+```bash
+# Multi-workspace flow: explicit tenant_id from the picker
+curl -X POST https://app.neuraldraft.io/central/api/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"jane@example.com","password":"...","tenant_id":42}'
+```
+
+```json
+{
+  "token": "1|abcdef...",
+  "tenant": { "id": 42, "name": "Acme", "domain": "acme.neuraldraft.io" },
+  "user":   { "id": 7, "name": "Jane Doe", "email": "jane@example.com", "created_at": "..." }
+}
+```
+
+`tenant_id` is optional — if you omit it, the server iterates each candidate
+workspace and uses the first one whose password verifies. Iteration is
+case-insensitive on email. A wrong-password attempt always returns
+`422 Unprocessable Entity` with `auth.failed`, regardless of whether the
+email exists.
+
 ## Where Sanctum and OAuth fit in
 
 The v1 Project API documented here is **API-key only**. The separate

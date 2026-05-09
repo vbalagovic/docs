@@ -98,7 +98,7 @@ curl -X POST https://api.neuraldraft.io/v1/jobs \
 {
   "job_id": "job_2NgcaXxFqLPo",
   "status": "pending",
-  "estimated_credits": 400
+  "estimated_credits": 60
 }
 ```
 
@@ -106,8 +106,9 @@ The pipeline runs research → outline → write → featured-image → SEO meta
 per-language translations. You can poll `GET /v1/jobs/{id}` for progress, or
 stream Server-Sent Events from `GET /v1/jobs/{id}/stream`.
 
-Cost: 400 credits — covers research, writing, image, and per-language
-translations.
+Cost: **60 credits** for the post itself (`blog_post` — covers research,
+draft, and featured image). Per-language translations charge **7 credits
+each** (`translate_language`) on top.
 
 ### 2. Schedule a post for next Tuesday
 
@@ -151,7 +152,7 @@ curl -X POST https://api.neuraldraft.io/v1/jobs \
   }'
 ```
 
-Cost: 70 credits per language.
+Cost: **7 credits per language** (`translate_language`).
 
 ### 5. Topic suggestions for a content calendar
 

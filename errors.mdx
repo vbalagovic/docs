@@ -81,9 +81,9 @@ Every mutating write returns this shape on a broke project — including the
 1-credit operations (`content_update`, `page_update`, `image_register`) as
 well as the larger generations (image, blog, video, website).
 
-Subscribe to the `project.credits_low` webhook (fired at 20% remaining) and
-the `project.credits_exhausted` event (fired the moment the first 402 fires) —
-both let you alert your team or auto-top-up.
+Watch the `credits_remaining` field on `GET /v1/projects/me/usage` (or
+react to a 402 in your client) to alert your team or auto-top-up before
+mutating writes start failing.
 
 ### `validation_failed`
 
