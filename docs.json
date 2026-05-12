@@ -77,6 +77,7 @@
             "group": "Pillars",
             "pages": [
               "pillars/cms",
+              "pillars/galleries",
               "pillars/blog",
               "pillars/social",
               "pillars/booking",
@@ -162,7 +163,7 @@
       {
         "header": "Company",
         "items": [
-          { "label": "Contact", "href": "mailto:hello@neuraldraft.io" },
+          { "label": "Contact", "href": "mailto:info@neuraldraft.io" },
           { "label": "Terms", "href": "https://neuraldraft.io/legal/terms" },
           { "label": "Privacy", "href": "https://neuraldraft.io/legal/privacy" }
         ]

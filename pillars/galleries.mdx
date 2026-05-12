@@ -1,0 +1,164 @@
+---
+title: "Galleries"
+description: "Named, ordered image collections. Carousels, lookbooks, product galleries — without inventing new keys every time."
+---
+
+Galleries are the CMS primitive for **variable-length image collections**.
+Hero carousels, product lookbooks, team grids, before/afters — anything
+where you want a named bucket of images that an admin (or an AI agent)
+can reorder, add to, and remove from.
+
+This is intentionally a separate resource from [content](/pillars/cms) and
+[images](/mcp/tools-and-resources): galleries are *collections*, not single
+values, and they aren't translated per locale. One gallery, one ordered
+list of `{ url, alt }` items, shared across every language.
+
+## Anatomy
+
+```json
+{
+  "slug": "home-carousel",
+  "name": "Home carousel",
+  "items": [
+    { "url": "https://cdn.example.com/hero-1.jpg", "alt": "Studio entrance" },
+    { "url": "https://cdn.example.com/hero-2.jpg", "alt": "Workshop" },
+    { "url": "https://cdn.example.com/hero-3.jpg", "alt": null }
+  ],
+  "items_count": 3,
+  "created_at": "2026-05-12T10:00:00Z",
+  "updated_at": "2026-05-12T11:32:11Z"
+}
+```
+
+- **`slug`** — stable identifier. Auto-derived from `name` on create
+  (`Home carousel` → `home-carousel`), with `-2` / `-3` / … appended on
+  collision. Immutable after create.
+- **`name`** — human-readable label; safe to rename.
+- **`items`** — ordered array of `{ url, alt? }`. Cap of **200 items**.
+- **`items_count`** — convenience field so listing UIs don't have to count.
+
+## The full-replace contract
+
+Updates to `items` are **full replace**. To add, remove, or reorder:
+
+1. `GET /galleries/{slug}` — fetch the current array
+2. Mutate in memory (push, splice, sort, …)
+3. `PATCH /galleries/{slug}` with the complete new `items` array
+
+This keeps the API tiny — no `POST /galleries/{slug}/items`, no item-level
+endpoints — and makes reorder a single round-trip. The trade-off: two
+concurrent writers will clobber each other unless they coordinate. In
+practice galleries are edited by one human at a time, so this is fine.
+
+## Quick example
+
+<CodeGroup>
+
+```ts SDK
+import { NeuralDraftClient } from "@neuraldraft/sdk";
+
+const nd = new NeuralDraftClient({ apiKey: process.env.NEURALDRAFT_API_KEY! });
+
+// Create a new gallery — slug auto-derives from the name.
+const g = await nd.galleries.create({
+  name: "Home carousel",
+  items: [
+    { url: "https://cdn.example.com/hero-1.jpg", alt: "Studio entrance" },
+    { url: "https://cdn.example.com/hero-2.jpg", alt: "Workshop" },
+  ],
+});
+
+// Add one image — fetch, mutate, send back.
+const current = await nd.galleries.get(g.slug);
+await nd.galleries.update(g.slug, {
+  items: [...current.items, { url: "https://cdn.example.com/hero-3.jpg" }],
+});
+
+// Render on the public site.
+for (const img of current.items) {
+  console.log(img.url, img.alt ?? "");
+}
+```
+
+```bash cURL
+# Create
+curl -X POST https://api.neuraldraft.io/v1/galleries \
+  -H "Authorization: Bearer $NEURALDRAFT_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Home carousel",
+    "items": [
+      { "url": "https://cdn.example.com/hero-1.jpg", "alt": "Studio entrance" }
+    ]
+  }'
+
+# Fetch
+curl https://api.neuraldraft.io/v1/galleries/home-carousel \
+  -H "Authorization: Bearer $NEURALDRAFT_API_KEY"
+
+# Full-replace update
+curl -X PATCH https://api.neuraldraft.io/v1/galleries/home-carousel \
+  -H "Authorization: Bearer $NEURALDRAFT_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "items": [
+      { "url": "https://cdn.example.com/hero-2.jpg", "alt": "Workshop" },
+      { "url": "https://cdn.example.com/hero-1.jpg", "alt": "Studio entrance" }
+    ]
+  }'
+
+# Delete
+curl -X DELETE https://api.neuraldraft.io/v1/galleries/home-carousel \
+  -H "Authorization: Bearer $NEURALDRAFT_API_KEY"
+```
+
+</CodeGroup>
+
+## When to use a gallery vs an image key
+
+Use a **gallery** when:
+- The number of images can change (admin adds / removes)
+- Order matters and should be editable
+- The set isn't per-locale (same images in every language)
+
+Use a single **image key** (`data-image-key="hero.background"`) when:
+- There's exactly one image in that slot
+- An AI agent will regenerate it via `generate_image` / `replace_image`
+
+You can mix the two — a hero with one keyed background + a carousel
+gallery below it is the common pattern.
+
+## Admin experience
+
+The Beta Admin's **Galleries** page (top-level sidebar entry) shows every
+gallery as a card with the first four thumbnails stacked, click into the
+editor to drag-reorder, add via the MediaLibrary picker, or paste a URL.
+Slugs are never shown to end users — they only see the name. The Galleries
+endpoints are also wired into the in-admin AI assistant.
+
+## From MCP
+
+AI agents get five tools that mirror the API one-to-one:
+`list_galleries`, `get_gallery`, `create_gallery`, `update_gallery`,
+`delete_gallery`. See
+[Tools and resources](/mcp/tools-and-resources#galleries--list_galleries--get_gallery--create_gallery--update_gallery--delete_gallery)
+for the schemas.
+
+## Scopes
+
+`galleries:read` is required for `GET` endpoints; `galleries:write` for
+`POST` / `PATCH` / `DELETE`. The wildcard scope (`*`) and the namespace
+wildcard (`galleries:*`) both grant everything.
+
+## Limits
+
+- **200 items** per gallery — the API refuses `>200` with a 422.
+- **2000 character** max per item URL.
+- **255 character** max per `alt` text.
+- No hard cap on number of galleries per project.
+
+## Source of truth
+
+Galleries live in the per-tenant database (`galleries` table), separate
+from `images` and `content`. Deleting a gallery removes the record only —
+the underlying image URLs stay in the images registry / media library.

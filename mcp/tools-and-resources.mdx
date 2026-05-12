@@ -285,6 +285,55 @@ auto-creates a stub page that you can backfill via `update_page`.
 `update_page` uses **merge semantics** — only the fields you pass are
 overwritten, the rest are preserved. Pass `null` to clear a meta field.
 
+### Galleries — `list_galleries` / `get_gallery` / `create_gallery` / `update_gallery` / `delete_gallery`
+
+Named, ordered image collections. One `slug` per gallery, an `items` array
+of `{url, alt}` (max 200). Slugs auto-derive from `name` on create with
+`-2`/`-3`/… suffixed on collision. **`items` updates are full-replace** —
+read with `get_gallery`, mutate the array, send the complete new list back.
+
+```json
+{
+  "name": "create_gallery",
+  "input": {
+    "name": "Home carousel",
+    "items": [
+      { "url": "https://cdn.example.com/hero-1.jpg", "alt": "Studio entrance" },
+      { "url": "https://cdn.example.com/hero-2.jpg", "alt": "Workshop" }
+    ]
+  }
+}
+```
+
+```json
+{
+  "name": "update_gallery",
+  "input": {
+    "slug": "home-carousel",
+    "items": [
+      { "url": "https://cdn.example.com/hero-2.jpg", "alt": "Workshop" },
+      { "url": "https://cdn.example.com/hero-1.jpg", "alt": "Studio entrance" },
+      { "url": "https://cdn.example.com/hero-3.jpg" }
+    ]
+  }
+}
+```
+
+`delete_gallery` removes the gallery record only — underlying image URLs
+stay in the images registry / media library.
+
+### Destructive deletes — `delete_content` / `delete_page` / `delete_component` / `delete_image`
+
+Fill the gap on the destructive side of the catalog. All four take the
+identifier and return 204. **No undo.**
+
+| Tool                | Identifier            | Notes                                                            |
+| ------------------- | --------------------- | ---------------------------------------------------------------- |
+| `delete_content`    | `key` (string)        | Removes every locale's value for the key.                        |
+| `delete_page`       | `id` (number)         | Soft-retires by default (`is_active=false`). `force: true` for a hard delete. Refuses on the homepage. |
+| `delete_component`  | `id` (number)         | Hard delete; the HTML chunk is gone. Re-register via `register_component`. |
+| `delete_image`      | `key` (string)        | Removes the key→URL binding only. CDN bytes are untouched.       |
+
 ### `generate_video`
 
 Short-form clip generation. Returns a Job; poll `get_job` until complete.
@@ -482,6 +531,15 @@ so smart clients can surface confirm-prompts before destructive ops:
 | `list_products`             |     ✓      |               |       ✓      |
 | `get_product`               |     ✓      |               |       ✓      |
 | `setup_booking_widget`      |     ✓      |               |       ✓      |
+| `list_galleries`            |     ✓      |               |       ✓      |
+| `get_gallery`               |     ✓      |               |       ✓      |
+| `create_gallery`            |            |               |              |
+| `update_gallery`            |            |               |       ✓      |
+| `delete_gallery`            |            |       ✓       |       ✓      |
+| `delete_content`            |            |       ✓       |       ✓      |
+| `delete_page`               |            |       ✓       |       ✓      |
+| `delete_component`          |            |       ✓       |       ✓      |
+| `delete_image`              |            |       ✓       |       ✓      |
 
 ## Observability
 

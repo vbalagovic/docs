@@ -96,8 +96,8 @@ info:
     identifier; the `detail` is a human-readable explanation.
   termsOfService: https://neuraldraft.io/legal/terms
   contact:
-    name: Neural Draft Developer Support
-    email: developers@neuraldraft.io
+    name: Neural Draft Support
+    email: info@neuraldraft.io
     url: https://neuraldraft.io/support
   license:
     name: Proprietary
@@ -137,6 +137,12 @@ tags:
       Multi-page authoring with per-page SEO meta (meta_title, meta_description,
       og_*, canonical_url). Pages live alongside the components that render
       them.
+  - name: Galleries
+    description: |
+      Named, ordered image collections. One `slug` per gallery, an `items`
+      array of `{url, alt}` (max 200). Updates are full-replace — fetch,
+      mutate, send the complete new list back. Use for carousels, lookbooks,
+      product galleries, and any other variable-length image set.
   - name: Images
     description: Brand-consistent image generation, replacement, and resolution by key.
   - name: Blog
@@ -1665,6 +1671,131 @@ paths:
                 properties:
                   data: { $ref: '#/components/schemas/Job' }
         '402': { $ref: "#/components/responses/PaymentRequired" }
+  /galleries:
+    get:
+      tags: [Galleries]
+      summary: List galleries
+      description: |
+        Paginated list of galleries ordered by name. Each item carries an
+        `items_count` so listing UIs can show counts without fetching every
+        item.
+      operationId: listGalleries
+      security:
+        - apiKeyAuth: []
+      parameters:
+        - in: query
+          name: page
+          schema: { type: integer, minimum: 1, default: 1 }
+        - in: query
+          name: per_page
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Gallery' }
+                  meta:
+                    type: object
+                    properties:
+                      current_page: { type: integer }
+                      last_page: { type: integer }
+                      total: { type: integer }
+                      per_page: { type: integer }
+        '401': { description: Missing or invalid API key. }
+        '403': { description: API key lacks `galleries:read` scope. }
+    post:
+      tags: [Galleries]
+      summary: Create a gallery
+      description: |
+        Slug is auto-derived from `name` when omitted. If the derived slug
+        already exists, `-2`, `-3`, … is appended automatically. `items`
+        are optional at create time — start empty and add via PATCH.
+      operationId: createGallery
+      security:
+        - apiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/GalleryCreateInput' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/Gallery' }
+        '409': { description: A gallery with the supplied slug already exists. }
+        '422': { description: Validation failed (>200 items, invalid url, slug shape). }
+  /galleries/{slug}:
+    parameters:
+      - in: path
+        name: slug
+        required: true
+        schema: { type: string, pattern: '^[a-z0-9][a-z0-9-]*$' }
+        example: home-carousel
+    get:
+      tags: [Galleries]
+      summary: Get a gallery
+      operationId: getGallery
+      security:
+        - apiKeyAuth: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/Gallery' }
+        '404': { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [Galleries]
+      summary: Update a gallery
+      description: |
+        Update `name` and/or `items`. **`items` is a full replace** — to add,
+        remove, or reorder, fetch the current array via GET, mutate, then
+        send the complete new list. Slug is immutable.
+      operationId: updateGallery
+      security:
+        - apiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/GalleryUpdateInput' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/Gallery' }
+        '404': { $ref: "#/components/responses/NotFound" }
+        '422': { description: Validation failed (>200 items, invalid url). }
+    delete:
+      tags: [Galleries]
+      summary: Delete a gallery
+      description: |
+        Hard delete. Underlying image URLs are **not** removed — they live
+        in the images registry / media library.
+      operationId: deleteGallery
+      security:
+        - apiKeyAuth: []
+      responses:
+        '204': { description: Deleted. }
+        '404': { $ref: "#/components/responses/NotFound" }
   /images:
     get:
       tags: [Images]
@@ -6340,6 +6471,69 @@ components:
         og_description: { type: [string, "null"] }
         og_image: { type: [string, "null"], format: uri }
         canonical_url: { type: [string, "null"], format: uri }
+    GalleryItem:
+      type: object
+      required: [url]
+      properties:
+        url:
+          type: string
+          format: uri
+          maxLength: 2000
+          example: https://cdn.neuraldraft.io/galleries/atelier/hero-1.jpg
+        alt:
+          type: [string, "null"]
+          maxLength: 255
+          example: Atelier studio entrance
+    Gallery:
+      type: object
+      required: [slug, name, items, items_count]
+      properties:
+        slug:
+          type: string
+          pattern: '^[a-z0-9][a-z0-9-]*$'
+          example: home-carousel
+        name:
+          type: string
+          maxLength: 255
+          example: Home carousel
+        items:
+          type: array
+          maxItems: 200
+          items: { $ref: '#/components/schemas/GalleryItem' }
+        items_count: { type: integer, example: 3 }
+        created_at: { type: [string, "null"], format: date-time }
+        updated_at: { type: [string, "null"], format: date-time }
+    GalleryCreateInput:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          maxLength: 255
+          example: Home carousel
+        slug:
+          type: string
+          pattern: '^[a-z0-9][a-z0-9-]{0,254}$'
+          description: |
+            Optional explicit slug. Omit to auto-derive from `name`. On
+            collision the server appends `-2`, `-3`, … to find a free slug.
+          example: home-carousel
+        items:
+          type: array
+          maxItems: 200
+          items: { $ref: '#/components/schemas/GalleryItem' }
+    GalleryUpdateInput:
+      type: object
+      description: |
+        Patch shape — every field is optional. **`items` is a full replace** —
+        to add, remove, or reorder items, fetch the current array via GET,
+        mutate, then send the complete new list.
+      properties:
+        name: { type: string, maxLength: 255 }
+        items:
+          type: array
+          maxItems: 200
+          items: { $ref: '#/components/schemas/GalleryItem' }
     Component:
       type: object
       required: [id, html, created_at, updated_at]

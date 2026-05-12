@@ -7,6 +7,70 @@ We follow [SemVer](https://semver.org/) on the `/v1/*` surface. Breaking
 changes are versioned and announced 90 days in advance. Subscribe to the RSS
 feed for automated notifications.
 
+## 2026-05-12 — SDK 0.3.4 + MCP 0.3.4 + Galleries + plan-quota fix
+
+**Added — Galleries** (the big one)
+
+A new top-level [resource](/pillars/galleries) for named, ordered image
+collections. Carousels, lookbooks, product galleries, before/afters —
+anywhere you want a variable-length list of images instead of a single
+`data-image-key` slot.
+
+- REST: `GET/POST /v1/galleries`, `GET/PATCH/DELETE /v1/galleries/{slug}`.
+  Slugs auto-derive from `name` with `-2`/`-3`/… on collision. `items` is
+  a full-replace array of `{url, alt?}`, capped at 200.
+- SDK: `nd.galleries.{list, get, create, update, delete}` + types
+  `Gallery`, `GalleryItem`, `GalleryCreateInput`, `GalleryUpdateInput`.
+- MCP: `list_galleries`, `get_gallery`, `create_gallery`, `update_gallery`,
+  `delete_gallery`.
+- Beta Admin: top-level **Galleries** page with drag-to-reorder, MediaLibrary
+  image picker, paste-URL fallback. Admins never see or type slugs.
+- New scopes: `galleries:read` / `galleries:write` (wildcards
+  `*` and `galleries:*` already cover them).
+
+**Added — Destructive deletes on the rest of the catalogue**
+
+The catalogue had one delete tool (`delete_image`); it now has four. All
+mirror existing REST endpoints; no API changes.
+
+- MCP: `delete_content`, `delete_page` (with `force: true` for hard delete),
+  `delete_component`. SDK already had matching `delete()` methods.
+
+**Fixed — Hobby / Build / Scale plans hitting legacy quotas**
+
+Tenants on the new credits-based plans (`hobby`, `build`, `scale`) were
+being checked against `plan_posts_limit` / `plan_socials_limit` — fields
+that only make sense for the legacy `starter` / `creator` plans. The new
+plans are gated **only by credit balance**; there is no monthly per-resource
+cap. A new `Tenant::hasFlexibleQuota()` helper short-circuits every limit
+check, promoted above the `is_free_user` branch so a tenant who upgraded
+from free trial → hobby with a stale `is_free_user=true` flag isn't stuck
+on the trial path. `config/subscriptions.php` also gained explicit
+`hobby` / `build` / `scale` entries with `flexible` limits and commerce /
+booking enabled.
+
+**Fixed — `/admin/cms-images` "Replace file" 422**
+
+The Beta Admin's image-replace flow PUT-uploaded a multipart body, but
+PHP only populates `$_FILES` on POST, so the controller's `hasFile('file')`
+check returned false and 422'd with `missing_replacement_mode`. The Vue
+page now sends `POST` with `_method=PUT`, which keeps the same backend
+handler while letting PHP parse the multipart body.
+
+**Fixed — RFC 7807 error URLs**
+
+`type` URLs in 4xx/5xx responses pointed at the old `neural-draft.com`
+domain. Now consistently `https://neuraldraft.io/errors/{code}`.
+
+**Added — `php artisan credits:topup` command**
+
+Replaces the tinker one-liner for admin credit adjustments. Supports
+additive (`credits:topup 92 5000`) and absolute (`credits:topup 92 5000
+--set`). Both go through `CreditService::adjust` so a `credit_transactions`
+audit row with `operation_type='admin_adjustment'` is written.
+
+---
+
 ## 2026-05-09 — SDK 0.3.0 + MCP 0.3.0 + central login workspace picker
 
 **Added (SDK `@neuraldraft/sdk@0.3.0`)**
