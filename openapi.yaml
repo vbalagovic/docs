@@ -1734,7 +1734,7 @@ paths:
                 properties:
                   data: { $ref: '#/components/schemas/Gallery' }
         '409': { description: A gallery with the supplied slug already exists. }
-        '422': { description: Validation failed (>200 items, invalid url, slug shape). }
+        '422': { description: "Validation failed (>200 items, invalid url, slug shape)." }
   /galleries/{slug}:
     parameters:
       - in: path
@@ -1783,7 +1783,7 @@ paths:
                 properties:
                   data: { $ref: '#/components/schemas/Gallery' }
         '404': { $ref: "#/components/responses/NotFound" }
-        '422': { description: Validation failed (>200 items, invalid url). }
+        '422': { description: "Validation failed (>200 items, invalid url)." }
     delete:
       tags: [Galleries]
       summary: Delete a gallery
