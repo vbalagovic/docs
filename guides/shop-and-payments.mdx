@@ -1,0 +1,46 @@
+---
+title: "Shop and payments"
+description: "Sell products from a Neural Draft site: the shop page, nd-shop blocks, payment options and connecting Stripe."
+---
+
+Turn the shop on in the admin (Settings → **Bookings and shop**). Then the
+workspace has:
+
+- a hosted shop page on the site address;
+- the `<nd-shop>` (all products, basket, checkout) and `<nd-product id="slug">`
+  blocks for any page, including [sites hosted elsewhere](/guides/embeds-and-cors);
+- products, categories, variants and orders in the admin under **Shop**, in
+  the API (`/v1/products`, `/v1/product-categories`, `/v1/orders`) and in the
+  hosted connector.
+
+## Payment options
+
+The shop works without any payment provider:
+
+- **Pay on pickup**
+- **Bank transfer** (your details are shown after ordering)
+- **Order request** (you contact the customer to arrange payment)
+
+For **card payments**, connect Stripe from **Shop → Payouts** in the admin
+and follow the steps there. Payments go to the business's own Stripe account.
+
+## Orders
+
+New orders appear in the admin under Shop → Orders and arrive as the
+`order.created` / `order.paid` [webhooks](/webhooks).
+
+<CodeGroup>
+
+```bash cURL
+curl "https://api.neuraldraft.io/v1/orders?status=paid" \
+  -H "Authorization: Bearer $NEURALDRAFT_API_KEY"
+```
+
+```ts SDK
+const { data: orders } = await nd.orders.list({ status: "paid" });
+```
+
+</CodeGroup>
+
+Selling uses no credits. The shop is included in Solo, Studio and agency
+client plans.

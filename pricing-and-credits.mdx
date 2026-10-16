@@ -1,229 +1,105 @@
 ---
-title: "Pricing & credits"
-description: "Pure usage-based pricing. One meter. Hard stop at zero. No surprise bills."
+title: "Credits and pricing"
+description: "1 credit = $0.01. Credits pay only for AI work Neural Draft does; hosting, pages, edits, deploys, forms, bookings and the shop are free."
 ---
 
-Neural Draft uses a **single-meter, pay-as-you-go** model. Every operation
-costs credits. You either subscribe to a tier (which buys credits at a discount
-plus a monthly allowance), top up ad-hoc, or stay free. There's no per-seat
-pricing, no per-tenant tax, no "Pro" gate. Every endpoint works at every tier;
-only the cost-per-credit differs.
+## The rule
 
-<Note>
-  **Hard stop at zero credits.** When your balance hits zero, every
-  credit-consuming operation returns
-  [`402 insufficient_credits`](/errors#insufficient-credits). Read-only
-  endpoints continue to work. No overage. No invoice surprises.
-</Note>
+**Credits are used only when Neural Draft's own AI pipeline does work.**
+Everything else is covered by the plan and its [limits](/guides/hosted-sites#limits-per-plan):
+hosting, pages, deploys, content and image writes through the API or MCP,
+forms, bookings, the newsletter, the shop, scheduling and publishing, and
+anything your own AI assistant writes.
 
-## What every operation costs
+1 credit = **$0.01**.
 
-| Operation                                          | Credits |
-| -------------------------------------------------- | ------: |
-| Chat message                                       |       1 |
-| Content update (`PUT /v1/content/{key}`)           |       1 |
-| Page create or update (`POST`/`PATCH /v1/pages`)   |       1 |
-| Image register (URL swap or multipart upload)      |       1 |
-| Page edit (inline AI tweak)                        |       2 |
-| Social post — text only                            |       5 |
-| Translate (per target language)                    |       7 |
-| Content plan creation                              |      10 |
-| Image generation                                   |      32 |
-| Social post — text + image                         |  5 + 32 |
-| Social post — text + video                         |  5 + 40 |
-| Video clip — budget (Wan 2.1, default)             |      40 |
-| Blog post (research + draft + featured image)      |      60 |
-| Video clip — premium (Kling v2.1 / Runway Gen4)    |     300 |
-| Website generation (full landing, multi-section)   |     240 |
-| Newsletter subscribe / contact-form submit         |       0 |
+## What costs credits
 
-<Note>
-  **Quality-default models.** Text generation runs on Claude Sonnet 4.6 (with
-  Haiku 4.5 for high-volume conversational ops like chat and inline page
-  edits); image generation runs on Google's **Nano Banana** (Gemini 2.5
-  image). Premium video uses Kling v2.1 / Runway Gen4. Forms (newsletters &
-  contact submissions) are free — they're storage + delivery, not AI.
-</Note>
+| Work | Credits | About |
+| --- | ---: | ---: |
+| Blog post (researched, written, with images) | 60 | $0.60 |
+| Translation by Neural Draft, per language (blog post, content key, site) | 10 | $0.10 |
+| Crafted static ad (1:1, 4:5 and 9:16) | 50 | $0.50 |
+| Reel (vertical, 8–15 s) | 500 | $5.00 |
+| Reel voiceover add-on | 10 | $0.10 |
+| App Capture (screens and recordings of a web app, for ads) | 200 | $2.00 |
 
-<Note>
-  **Premium video is gated.** `tier=premium` on `POST /v1/videos` (Kling /
-  Gen4) requires a **Build** plan or higher; Hobby and Free projects can use
-  the budget tier (Wan 2.1) by default and will get
-  `402 plan_required` if they ask for premium.
-</Note>
+We don't offer AI image or video creation. We craft finished static ads and
+reels for your brand, from the brand kit, your own photos and screenshots.
+The old `POST /v1/images` (with a prompt) and `POST /v1/videos` endpoints
+answer `410 media_generation_moved`.
 
-Read-only endpoints (`GET`) and a handful of lightweight writes (e.g.
-updating a draft, attaching a tag, scheduling a post, registering a
-component) do not consume credits. Mutating writes through the public API —
-`PUT /v1/content/{key}`, `POST`/`PATCH /v1/pages`, and `image_register`
-(URL swap on `PUT /v1/images/{key}` or multipart upload on `POST /v1/images`) —
-each cost 1 credit, charged on the successful write.
-
-<Note>
-  **Social post media surcharge.** `POST /v1/social-posts` with `type=ai`
-  always charges the 5-credit text base; if `media_type=image` or
-  `media_type=video` is also set, an extra `image` (32) or `video` (40,
-  budget tier) charge is recorded against the same job, so the total
-  reflects what was actually generated. Social posts always use the
-  budget video tier — request premium clips via `POST /v1/videos`
-  with `tier=premium` (Build+).
-</Note>
-
-A few examples to ground the numbers:
-
-- A blog post with 4 translations: 60 + 4 × 7 = 88 credits.
-- A cross-platform social post with one image (single API call, posts to FB +
-  IG + TikTok): 5 + 32 = 37 credits.
-- A landing page with a hero image generated mid-session: 32 + 240 = 272
-  credits.
-- A short product reel via `POST /v1/videos` (budget, default) or
-  `media_type=video` social: 40 credits per clip. Premium clip via
-  `tier=premium`: 300 credits.
+**Free (0 credits):** `PUT /v1/content/{key}`, `POST`/`PATCH /v1/pages`,
+`POST`/`PUT /v1/images` (upload or URL), components, galleries, a blog post you
+create with `type: "manual"`, deploys, bookings, orders, forms, webhooks,
+every `GET`, and translations your own assistant writes (for example
+`translate_site` in its default mode).
 
 ## Plans
 
-A plan doesn't unlock features — every operation is available at every tier.
-A plan buys credits at a discount with a monthly allowance.
+| | Free | Solo | Studio |
+| --- | ---: | ---: | ---: |
+| Price | $0 | $49 / month ($490 / year) | $149 / month ($1,490 / year) |
+| Credits | 400 once | 3,000 a month | 10,000 a month |
+| Growth preview | 2 static ads + 1 reel, once | | |
+| Sites / brands | 1 on `name.neuraldraft.io`, with badge | 1, own domain, no badge | 3, own domain each |
+| API, SDK, developer MCP, hosted connector | yes | yes | yes |
 
-| Plan       | Credits / mo | Price | $/credit | Discount |
-| ---------- | -----------: | ----: | -------: | -------- |
-| **Free**       | 250          | $0    | —        | —        |
-| **Hobby**      | 5,000        | $25   | $0.005   | base     |
-| **Build**      | 25,000       | $119  | $0.00476 | 5% off   |
-| **Scale**      | 100,000      | $399  | $0.00399 | 20% off  |
-| **Enterprise** | custom       | custom | volume contract | up to 40% off |
+Annual billing is 10 × the monthly price. On Free, after the Growth preview,
+static ads come from credits (watermarked) and there are no more reels.
 
-### Top-ups
+**Top-ups** (one-time purchases):
 
-Top up anytime, on any tier (including Free), at the base rate of **$0.005 /
-credit**. No commitment, no expiry while the project is active.
+| Pack | Credits |
+| --- | ---: |
+| $10 | 1,000 |
+| $25 | 2,750 |
+| $50 | 6,000 |
+| $100 | 13,000 |
 
-| Bundle | Credits |
-| ------ | ------: |
-| $20    |   4,000 |
-| $100   |  20,000 |
-| $500   | 100,000 |
+Buy plans and top-ups in the admin (Settings → Plan & billing) or ask the
+hosted connector for an upgrade link.
 
-### Free tier
+## Agencies
 
-Every project starts with **250 credits per month, no card required**. The
-free tier is sized for evaluation — enough to build, test and demo a working
-integration end to end, not enough to run a real workload. Mix-and-match
-examples of what 250 credits buys at the new quality-default pricing:
-- ~250 chat messages, **or**
-- ~50 text-only social posts, **or**
-- ~7 Nano Banana images, **or**
-- 4 full Sonnet 4.6 blog posts, **or**
-- ~6 budget video clips, **or**
-- 1 full website generation.
+Agencies get a quote: from **$190 a month + $49 per client site**, with a
+pooled credit allowance shared by all clients and a monthly cap per client.
+See [Agencies](/guides/agencies) and [talk to us](https://neuraldraft.io/support?topic=agency#contact).
 
-Premium video (`tier=premium`) is **not** available on Free or Hobby — it
-requires a Build plan or higher.
+## At zero
 
-Free-tier projects also surface a small "Built with Neural Draft" badge in
-embedded widgets and on platform-rendered pages — turning that off requires a
-paid tier.
+Credits stop at zero: there are no overage charges. A credit-using call
+returns `402`:
 
-Hit zero and the API returns `402 insufficient_credits` until next month — no
-surprise bills. Top up with a one-time pack or upgrade to a paid tier
-whenever you're ready.
+```json
+{
+  "type": "https://neuraldraft.com/errors/payment-required",
+  "title": "Payment Required",
+  "status": 402,
+  "detail": "Insufficient credits.",
+  "code": "insufficient_credits",
+  "cost": 60,
+  "balance": 12
+}
+```
 
-## Tracking usage
+Sites, bookings, forms and the shop keep working. Failed jobs are refunded
+automatically.
 
-The dashboard shows a real-time credit ledger. The same data is on the API:
+## Checking usage
 
-```bash
+<CodeGroup>
+
+```bash cURL
 curl https://api.neuraldraft.io/v1/projects/me/usage \
   -H "Authorization: Bearer $NEURALDRAFT_API_KEY"
 ```
 
-```json
-{
-  "period_start": "2026-04-01T00:00:00Z",
-  "period_end": "2026-05-01T00:00:00Z",
-  "plan": "build",
-  "credits_included": 25000,
-  "credits_used": 8421,
-  "credits_remaining": 16579,
-  "top_ups": 0,
-  "by_operation": {
-    "blog_post.generate": 5200,
-    "image.generate": 1840,
-    "social_post.generate": 1100,
-    "translation.batch": 281
-  }
-}
+```ts SDK
+const usage = await nd.projects.usage();
 ```
 
-A few patterns we've seen work well:
+</CodeGroup>
 
-- **Soft alerts**: poll `GET /v1/projects/me/usage` and Slack the team
-  when `credits_remaining` drops below 20% of the included allowance.
-- **Per-customer cost tracking**: tag your own end-customers in
-  `metadata.customer_id` on async jobs; the dashboard exports a CSV grouped by
-  metadata.
-- **Hard ceilings per environment**: production keys have full scopes; preview
-  keys have `content:*` only and live on a separate top-up budget.
-
-## How pricing changes
-
-We re-evaluate credit costs roughly every 90 days against current upstream
-model prices (OpenAI, Anthropic, image and video providers). When upstream
-list prices drop materially, your credit costs drop too. When they rise,
-we may need to bump credit costs — always with **at least 30 days' notice
-before any change takes effect**, communicated by email and on the
-[changelog](/changelog).
-
-Predictable, in plain words:
-
-- Per-credit pricing tracks upstream list-price moves and major capability
-  shifts (e.g. a new model tier). Nothing else.
-- Increases are pre-announced with 30+ days' notice. You always have time to
-  budget or move.
-
-## FAQ
-
-<AccordionGroup>
-  <Accordion title="What if I run out mid-job?">
-    Async jobs (blog generation, batch translation, etc.) reserve credits when
-    queued. If your balance is too low at queue time, the request returns
-    `402 insufficient_credits` immediately — nothing is started. Reserved
-    credits are refunded if the job fails for our reasons (e.g. upstream
-    timeout).
-  </Accordion>
-
-  <Accordion title="Can I get a refund?">
-    Unused subscription credits don't roll over or refund — that's how the
-    discount is funded. Top-up credits are refundable for 30 days at our
-    discretion if your project is in good standing and you haven't used >25% of
-    the bundle. Email
-    [info@neuraldraft.io](mailto:info@neuraldraft.io).
-  </Accordion>
-
-  <Accordion title="Do retries cost extra?">
-    Failed AI generations that we retry server-side don't cost extra — you pay
-    once per successful or definitively-failed job. Webhook deliveries that
-    retry due to your endpoint returning non-2xx are billed per delivery
-    attempt (0.02 credits each); we cap retries at 5 with exponential backoff.
-  </Accordion>
-
-  <Accordion title="Do I pay for read-only API calls?">
-    No. `GET` endpoints don't consume credits unless explicitly noted in the
-    [API reference](/api-reference) for that endpoint (very few do).
-    Rate limits still apply — see [rate-limits](/rate-limits).
-  </Accordion>
-
-  <Accordion title="What about agency / reseller pricing?">
-    Agencies managing multiple projects get a master billing account — every
-    project rolls up into a single invoice with project-level breakdowns. Email
-    [info@neuraldraft.io](mailto:info@neuraldraft.io) for volume terms.
-  </Accordion>
-
-  <Accordion title="When am I billed?">
-    Subscriptions: monthly, on the day-of-month you signed up. Top-ups: on
-    purchase. Storage and recurring line items (connected accounts, custom
-    domains): metered hourly, billed at month-end against the included
-    allowance, then top-ups, then card-on-file (only if you've opted into
-    auto-recharge).
-  </Accordion>
-</AccordionGroup>
+The admin shows the same under Settings → Credits, with what each credit was
+used for.

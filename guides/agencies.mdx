@@ -1,0 +1,124 @@
+---
+title: "Agencies"
+description: "Build and run client sites on Neural Draft: one workspace and database per client, an agency dashboard, pooled credits, white-label, and one MCP for all your clients."
+---
+
+## How it fits together
+
+- **The agency** has an agency dashboard for clients, team, billing and
+  settings. Sign in at [neuraldraft.io/agency/login](https://neuraldraft.io/agency/login).
+- **Each client** gets its own workspace with **its own database**: website,
+  blog, bookings, forms, shop, socials, API keys. Client admins live at
+  [app.neuraldraft.io](https://app.neuraldraft.io).
+- **Agency staff** open any client's admin with one click from the dashboard
+  (a single-use link; the admin shows "Managing [client] for [agency]").
+- **Clients** are invited into their own workspace only. They edit it in the
+  admin or by asking Claude or ChatGPT.
+
+Agency accounts are set up by Neural Draft on a quote (from $190 a month plus
+$49 per client site). [Talk to us](https://neuraldraft.io/support?topic=agency#contact).
+
+## 1. Pick how each client site is hosted
+
+| You build | Publish with | The client edits |
+| --- | --- | --- |
+| Simple pages (HTML sections, no JS) | Connector `publish_site_page` | Every text and picture, automatically |
+| Your own static or JS site (Claude Code, Cursor, any framework) | Connector `deploy_site` (html, files or a zip) | The blocks you mark as [editable](/guides/editable-markup) |
+| A site hosted elsewhere | Headless API + [nd.js blocks](/guides/embeds-and-cors) (allow the site's origin) | Blocks you read from the API |
+
+Every client workspace also has hosted blog, booking, form, subscribe and
+shop pages on its address (`<client>.neuraldraft.io`, or the client's own
+domain once [connected](/guides/custom-domains)). Agency client sites carry no
+Neural Draft badge.
+
+## 2. Make texts and pictures editable
+
+```html
+<h1 data-translate="hero.title">Fresh bread every morning</h1>
+<p><nd-text key="hours">Mon–Sat 7:00–15:00</nd-text></p>
+<img data-image-key="hero" src="/img/hero.jpg" alt="Our bakery">
+```
+
+Values are applied on the server, edits show at once, and a redeploy never
+overwrites what the client changed. Details: [Editable markup](/guides/editable-markup).
+
+## 3. Developer MCP with every client key
+
+Each client workspace has its own API key (client admin → Settings → For
+developers → API keys). A key only reaches its own workspace.
+`@neuraldraft/mcp` 0.4.0 holds them all in one server:
+
+```json
+{
+  "mcpServers": {
+    "neuraldraft": {
+      "command": "npx",
+      "args": ["-y", "@neuraldraft/mcp"],
+      "env": {
+        "NEURALDRAFT_API_KEYS": "villa-lavanda=ndsk_live_…,linden-bakery=ndsk_live_…",
+        "NEURALDRAFT_WORKSPACE": "villa-lavanda"
+      }
+    }
+  }
+}
+```
+
+`list_workspaces` shows the clients and which one is active;
+`switch_workspace` changes it. See [Several workspaces](/mcp/multi-workspace).
+In code, the SDK's `NeuralDraftWorkspaces` does the same ([SDK](/sdk#several-workspaces)).
+
+## 4. The hosted connector for staff and clients
+
+- **Agency staff:** sign in to the [hosted connector](/guides/hosted-connector)
+  with the agency email and tick the client workspaces to connect. Every tool
+  takes `workspace_id`; with several connected and none named, the assistant
+  asks which client.
+- **Clients:** invite them from their workspace (admin Settings → Team, or
+  `invite_teammate` in the chat). The invitation comes in the agency's name.
+  They connect with their own email and only ever see their own workspace.
+
+## 5. Headless API for sites hosted elsewhere
+
+Server-side only, with the client workspace's key:
+
+- `GET /v1/content?lang=en`, `GET /v1/content/bulk?keys=a,b&lang=en`, `PUT /v1/content/{key}`
+- `GET /v1/images`, `GET /v1/images/{key}`
+- `GET /v1/pages`, `GET /v1/blog-posts`, bookings, products and orders
+
+Base URL `https://api.neuraldraft.io/v1`. Never put a key in browser code.
+
+## Credits for client work
+
+- The agency has **one pool** of credits a month shared by all clients. AI
+  work done by Neural Draft (blog posts, translations, ads, reels) is charged to
+  the pool, never to the client.
+- **Per-client cap:** each client has a monthly cap from the pool (default
+  1,500) that the agency can change. At the cap, AI work stops for that client
+  with "ask your agency to raise your limit".
+- At 80% of the pool the agency owner gets an email; at 100% AI work stops
+  for every client. Sites, bookings, forms and the shop keep working. Nothing
+  is billed automatically.
+- Work the client's or your own AI does (pages, edits, deploys) costs no
+  credits.
+
+## White-label: what is included
+
+- No Neural Draft badge on client sites.
+- The agency's name, logo and colour on the agency dashboard and its login page.
+- "Managed by [agency]" in each client's admin; plan and billing are hidden
+  from clients.
+- Staff and client invitation emails sent in the agency's name.
+
+Not included today: the client admin on the agency's own domain (it stays
+app.neuraldraft.io), a read-only viewer role, limiting staff to selected
+clients, and per-plan feature limits for clients (every client currently gets
+the full feature set).
+
+## Isolation
+
+- Separate database per client workspace.
+- API keys and admin sign-in tokens work for exactly one workspace.
+- Connector connections only reach the workspaces ticked at sign-in, and
+  membership is re-checked on every call: removing a staff member or archiving
+  a client cuts access immediately.
+- An agency can only see and change its own clients and team.

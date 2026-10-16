@@ -1,0 +1,107 @@
+---
+title: "Hosted connector"
+description: "Neural Draft in Claude, ChatGPT, Codex, Claude Code and Cursor: one URL, sign in, no API key."
+---
+
+The hosted connector is a remote MCP server at:
+
+```
+https://neuraldraft.io/mcp
+```
+
+Every app uses the same URL. People sign in with Google or an emailed code
+(OAuth); new accounts get a free workspace. There is no API key to paste, so
+it is the right way for **business owners and agency clients** to work on their
+site, and for developers it adds the hosting tools (`deploy_site`,
+`rollback_site`, `connect_custom_domain`…) that the API-key package doesn't
+have.
+
+## Add it
+
+<Tabs>
+  <Tab title="Claude">
+    Claude web or desktop: **Customize → Connectors** (desktop: Settings →
+    Connectors) → **+ → Add custom connector**. Name it *Neural Draft*, paste
+    the URL, click **Add**, then **Connect** and sign in. It syncs to the Claude
+    phone apps.
+  </Tab>
+  <Tab title="ChatGPT">
+    **Settings → Apps → Add (+) → Add custom MCP server**. Name *Neural Draft*,
+    paste the URL, keep authentication on OAuth, tick the confirmation and
+    **Create**, then **Continue to Neural Draft** and sign in. If you don't see
+    the option, turn on Developer mode under Settings → Apps → Advanced
+    settings (Business/Enterprise admins may need to allow custom apps).
+  </Tab>
+  <Tab title="Claude Code">
+    ```bash
+    claude mcp add --transport http neuraldraft https://neuraldraft.io/mcp
+    ```
+    Then run `/mcp`, pick `neuraldraft` → **Authenticate**.
+  </Tab>
+  <Tab title="Codex">
+    ```bash
+    codex mcp add neuraldraft --url https://neuraldraft.io/mcp
+    codex mcp login neuraldraft
+    ```
+    Or in `~/.codex/config.toml`:
+    ```toml
+    [mcp_servers.neuraldraft]
+    url = "https://neuraldraft.io/mcp"
+    scopes = ["mcp"]
+    tool_timeout_sec = 120
+    ```
+  </Tab>
+  <Tab title="Cursor / VS Code">
+    `~/.cursor/mcp.json`:
+    ```json
+    { "mcpServers": { "neuraldraft": { "url": "https://neuraldraft.io/mcp" } } }
+    ```
+    VS Code:
+    ```bash
+    code --add-mcp '{"name":"neuraldraft","type":"http","url":"https://neuraldraft.io/mcp"}'
+    ```
+  </Tab>
+</Tabs>
+
+## What it can do
+
+| Area | Tools (examples) |
+| --- | --- |
+| Start | `get_started` (setup checklist, ideas), `get_workspace_overview`, `get_plan`, `list_workspaces` |
+| Website | `get_site_overview`, `get_design_kit`, `deploy_site`, `publish_site_page`, `revert_site_page`, `rollback_site`, `list_deploys`, `add_site_image`, `update_site_basics`, `translate_site`, `set_site_mode`, `setup_blog` |
+| Editing | `list_site_texts`, `update_site_text` (change texts and pictures without a redeploy) |
+| Domain | `connect_custom_domain` (with `check: true` to verify) |
+| Embeds | `get_embed_snippet` (booking, form, newsletter, blog feed, shop, product for another website) |
+| Blog | `generate_blog_post`, `create_blog_post`, `translate_blog_post`, `publish_blog_post`, `set_blog_languages`, `share_blog_post_to_facebook` |
+| Customers | `create_bookable_service`, `set_availability`, `list_bookings`, `create_form`, `list_form_submissions`, `list_subscribers`, `export_submissions` |
+| Shop | products, orders and shop settings (when the shop is turned on) |
+| Socials and ads | `connect_social_account`, `schedule_post`, `list_queue`, `generate_ads`, `capture_app` |
+| Team | `invite_teammate` |
+
+Some clients show grouped tools (`site_info`, `edit_site`, `write_blog`…)
+with an `action` argument; they map one-to-one to the tools above.
+
+Anything public (publishing a page, deploying, changing live text) asks for a
+confirmation first unless the person turned that off.
+
+We don't offer AI image or video creation. We craft finished static ads and
+reels for your brand, from the brand kit, your own photos and screenshots.
+
+## Several workspaces
+
+When you connect, you tick the workspaces this connection may use. Every tool
+takes a `workspace_id`; with several connected and none named, the assistant
+asks which one. Membership is checked on every call, so removing someone
+from a workspace cuts their access at once. See [Agencies](/guides/agencies).
+
+## Hosted connector or developer MCP?
+
+| | Hosted connector | `@neuraldraft/mcp` |
+| --- | --- | --- |
+| Auth | Sign-in (OAuth) | API key per workspace |
+| Runs | On our server (remote HTTP) | Locally via `npx` (stdio) |
+| Best for | Building and hosting the site, client edits, domains, blog, bookings, socials | Wiring a codebase: brand context, content keys, components, pages, galleries |
+| Deploy a site | Yes (`deploy_site`) | No |
+| Several clients | Tick workspaces at sign-in | `NEURALDRAFT_API_KEYS` |
+
+Developers often add both to Claude Code or Codex.

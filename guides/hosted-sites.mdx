@@ -1,0 +1,92 @@
+---
+title: "Hosted sites and deploy_site"
+description: "Host a site you built (static or JS) on Neural Draft, or publish editable pages. Versions, rollback, limits."
+---
+
+Every workspace has a public site at `https://<name>.neuraldraft.io` (or your
+[own domain](/guides/custom-domains)). It also serves the workspace's blog,
+booking, form, newsletter and shop pages. You fill it in one of two ways:
+
+| | `deploy_site` | `publish_site_page` |
+| --- | --- | --- |
+| What you send | A complete static site or JS app: `html`, `files[]`, or a zip of `dist/` | Page body HTML + CSS per page |
+| JavaScript | Yes, served as written in an isolated site | No (sanitized: no scripts, no event handlers) |
+| What the client can edit | The blocks you mark ([editable markup](/guides/editable-markup)) | Every text and picture, automatically |
+| History | Each deploy is an immutable version; `rollback_site` | Each page is versioned; `revert_site_page` |
+
+Both are tools on the [hosted connector](/guides/hosted-connector), so you use
+them from Claude Code, Codex, Cursor, Claude or ChatGPT.
+
+## Deploy a build
+
+In Claude Code or Codex with the connector added:
+
+> Run the build, then deploy the dist folder to Neural Draft with deploy_site.
+
+The assistant reads the build folder and sends it. The tool takes:
+
+| Argument | |
+| --- | --- |
+| `html` | A single-file app: the complete `index.html`. |
+| `files` | `[{ path, content, encoding: "utf8" \| "base64" }]`; `index.html` is required. Text as utf8, images and fonts as base64. |
+| `archive` | Instead of `files`: a base64 `.zip` (or `.tar.gz`) of the build folder. One top-level folder is stripped. |
+| `spa_fallback` | Default `true`: unknown paths serve `index.html` (client-side routing). |
+| `message` | A note for the deploy history. |
+| `check` | Default `true`: renders the live home page at 1440 and 390 px and returns screenshots and issues. |
+| `edits` | Small changes without resending the site: `[{ path, find, replace, all? }]` applied to the live files. |
+
+It asks for confirmation (the site changes publicly), goes live atomically and
+returns the URL, screenshots and how many editable blocks it found.
+
+There is no server-side code: use a static build or CDN modules
+(`esm.sh`, `cdn.jsdelivr.net`). Inside the site, Neural Draft features work
+through `nd.js`:
+
+```html
+<script src="/_nd/nd.js" defer></script>
+<nd-booking service="consultation"></nd-booking>
+<nd-form id="contact"></nd-form>
+<nd-blog-feed limit="3"></nd-blog-feed>
+<nd-newsletter></nd-newsletter>
+```
+
+## Versions and rollback
+
+- `list_deploys`: versions, sizes, notes and which one is live.
+- `rollback_site`: makes the previous deploy (or `version: N`) live again
+  instantly. `mode: "pages"` switches back to the published pages.
+- A redeploy never overwrites texts or pictures the client already edited.
+
+## Editable pages instead
+
+`publish_site_page` publishes one page at `<site>/<slug>` (`""` is the home
+page; `_header` and `_footer` are shared on every page). Neural Draft
+sanitizes and versions it, and every text and picture becomes editable and
+translatable. Use `get_design_kit` for the `/_nd/kit.css` classes themed from
+the brand and `add_site_image` to prepare pictures (WebP in several widths).
+Blocks available in pages: `<nd-form>`, `<nd-booking>`, `<nd-blog-feed>`,
+`<nd-newsletter>`, `<nd-gallery>`, `<nd-social-links>`, `<nd-map>`,
+`<nd-language-switcher>`.
+
+## Blog only
+
+Already have a website? `set_site_mode` with `blog_only` (or `setup_blog`,
+which reads your site and styles the blog to match) hosts just the blog plus
+booking, contact and newsletter pages, ideally on `blog.yourdomain.com`.
+
+## Limits per plan
+
+Hosting, deploys and pages use no credits. Limits come from the plan:
+
+| | Free | Solo | Studio |
+| --- | ---: | ---: | ---: |
+| Pages | 5 | 25 | 100 |
+| Deploy size | 5 MB | 25 MB | 100 MB |
+| Files per deploy | 150 | 500 | 2,000 |
+| Versions kept | 10 | 30 | 50 |
+| Forms | 3 | 20 | 100 |
+| Site languages | 2 | 6 | 20 |
+| Own domain | no | yes | yes |
+| "Made with Neural Draft" badge | yes | no | no |
+
+Agency client workspaces have no badge.

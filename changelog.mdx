@@ -7,6 +7,54 @@ We follow [SemVer](https://semver.org/) on the `/v1/*` surface. Breaking
 changes are versioned and announced 90 days in advance. Subscribe to the RSS
 feed for automated notifications.
 
+## 2026-10-16 — Hosted sites, agencies, MCP 0.4.0, SDK 0.4.0, 1-cent credits
+
+**Added**
+
+- **Hosted sites**: `deploy_site` (static sites and JS apps, versions,
+  `rollback_site`) and `publish_site_page` on the
+  [hosted connector](/guides/hosted-connector) (`https://neuraldraft.io/mcp`,
+  for Claude, ChatGPT, Codex, Claude Code and Cursor). See
+  [Hosted sites](/guides/hosted-sites).
+- **Editable markup** in deployed sites: `data-translate`, `<nd-text>`,
+  `data-image-key`, applied on the server; a redeploy never overwrites client
+  edits. [Guide](/guides/editable-markup).
+- **Client editing**: Website → Edit site visual editor (drafts, publish,
+  undo) and `list_site_texts` / `update_site_text` by chat.
+- **Custom domains** with a CNAME + TXT record and automatic HTTPS.
+  [Guide](/guides/custom-domains).
+- **nd.js on sites hosted elsewhere**: allowed origins via the admin,
+  `PATCH /v1/projects/me` (`allowed_origins`) or `update_site_basics`.
+  [Guide](/guides/embeds-and-cors).
+- **Agencies**: one workspace and database per client, agency dashboard,
+  pooled credits with per-client caps. [Guide](/guides/agencies).
+- **`@neuraldraft/mcp` 0.4.0**: several workspaces in one server
+  (`NEURALDRAFT_API_KEYS`, `NEURALDRAFT_WORKSPACE`, `list_workspaces`,
+  `switch_workspace`). [Guide](/mcp/multi-workspace).
+- **`@neuraldraft/sdk` 0.4.0**: `NeuralDraftWorkspaces`, `fromEnv`,
+  `siteTexts`, `content.list`, `bookings`, booking services, availability and
+  settings, `forms`, `orders`, `productCategories`, product variants, `social`,
+  `webhooks`, `allowed_origins`. [SDK](/sdk).
+
+**Changed**
+
+- **Credits**: 1 credit = $0.01 and only Neural Draft's AI work uses them
+  (blog post 60, translation 10 per language, static ad 50, reel 500, App
+  Capture 200). Content, page and image writes are now free. Plans: Free
+  (400 credits once), Solo $49 (3,000 a month), Studio $149 (10,000 a month).
+  [Credits and pricing](/pricing-and-credits).
+
+**Removed**
+
+- AI image and video generation: `POST /v1/images` with a `prompt`, image
+  regeneration and `POST /v1/videos` answer `410 media_generation_moved`. We
+  don't offer AI image or video creation. We craft finished static ads and
+  reels for your brand.
+- The Hobby / Build / Scale API plans are no longer sold (existing
+  subscribers keep them).
+- The "Migration from SaaS" and Stripe Connect setup pages; see
+  [Shop and payments](/guides/shop-and-payments).
+
 ## 2026-05-12 — SDK 0.3.4 + MCP 0.3.4 + Galleries + plan-quota fix
 
 **Added — Galleries** (the big one)

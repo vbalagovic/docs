@@ -1,0 +1,113 @@
+---
+title: "Embeds and CORS"
+description: "Booking, forms, newsletter, blog feed and shop blocks on any website, including sites hosted outside Neural Draft."
+---
+
+`nd.js` is a small script with web components for the parts of a site that
+need a backend. On a Neural Draft hosted site it is served at `/_nd/nd.js`;
+on any other website you load it from the workspace address.
+
+## Blocks
+
+| Block | What it does |
+| --- | --- |
+| `<nd-booking service="slug">` | Booking calendar for a bookable service |
+| `<nd-form id="contact">` | Contact or custom form (replies land in the admin Inbox) |
+| `<nd-newsletter>` | Newsletter sign-up |
+| `<nd-blog-feed limit="3">` | Latest blog posts |
+| `<nd-shop>`, `<nd-product id="slug">` | Products, basket and checkout |
+| `<nd-language-switcher>` | The site's languages |
+
+Theming: CSS variables `--nd-primary`, `--nd-surface`, `--nd-text`,
+`--nd-radius`, `--nd-font-body`, or the `unstyled` attribute to style them
+yourself. `get_design_kit` on the hosted connector has the full guide.
+
+JS API on `window.ND`: `getPosts({lang, limit})`, `submitForm(id, fields)`,
+`getServices()`, `getAvailability(service, {month})`, `getSlots(service, date)`,
+`book({...})`, `subscribe(email, {lang})`, `getShop({lang})`, `basket`,
+`order({...})`, `applyContent(root)`.
+
+## On a Neural Draft hosted site
+
+```html
+<script src="/_nd/nd.js" defer></script>
+<nd-booking service="consultation"></nd-booking>
+```
+
+Nothing to configure.
+
+## On a site hosted elsewhere
+
+WordPress, Webflow, Vercel, Netlify, plain HTML: load `nd.js` from the
+workspace address and use the same tags.
+
+```html
+<script src="https://linden-bakery.neuraldraft.io/_nd/nd.js" defer></script>
+<nd-booking service="sourdough-workshop"></nd-booking>
+<nd-form id="cake-order"></nd-form>
+```
+
+`nd.js` calls `/_nd/api/*` on the workspace address from the visitor's
+browser, so that website's address must be **allowed**:
+
+- **Always allowed:** the workspace address, its connected custom domains, and
+  the website saved on the workspace (with and without `www.`).
+- **Anything else:** add the origin (`https://www.client.co.uk`, no path):
+  - admin: **Settings → For developers → Domain and other websites**;
+  - API: `PATCH /v1/projects/me` with `{"allowed_origins": [...]}` (the list
+    is replaced; `[]` clears it);
+  - chat: `update_site_basics` with `allowed_origins`.
+- https only; `http://localhost:<port>` is accepted for local testing. At most
+  20 origins.
+
+<CodeGroup>
+
+```bash cURL
+curl -X PATCH https://api.neuraldraft.io/v1/projects/me \
+  -H "Authorization: Bearer $NEURALDRAFT_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"allowed_origins":["https://www.client.co.uk","http://localhost:5173"]}'
+```
+
+```ts SDK
+await nd.projects.update({
+  allowed_origins: ["https://www.client.co.uk", "http://localhost:5173"],
+});
+```
+
+</CodeGroup>
+
+How it behaves: an allowed origin gets `Access-Control-Allow-Origin` for its
+own address (preflight `204`). A browser on any other site is refused: the
+preflight answers `403` and a `POST` answers `403 origin_not_allowed`.
+Requests never carry cookies or credentials, and the endpoints stay rate
+limited and form-token protected.
+
+## Iframe alternative (no allow-list)
+
+`embed.js` shows the same blocks in an iframe, so it needs no allowed origins:
+
+```html
+<div data-nd-embed="booking" data-nd-id="sourdough-workshop"></div>
+<script src="https://linden-bakery.neuraldraft.io/_nd/embed.js" async></script>
+```
+
+Types: `form` (`data-nd-id` = form id), `booking` (service, optional),
+`newsletter`, `blog-feed` (`data-nd-limit`), `shop`, `product`
+(`data-nd-id` = product slug). Optional `data-nd-lang`.
+
+`get_embed_snippet` on the hosted connector returns the right snippet plus
+steps for WordPress, Wix, Squarespace, Webflow and Shopify.
+
+## Fully headless
+
+If you'd rather render everything yourself, read from the API on your server
+with the workspace key (never in browser code):
+
+- `GET /v1/content?lang=en`, `GET /v1/content/bulk?keys=a,b&lang=en`
+- `GET /v1/pages`, `GET /v1/blog-posts`, `GET /v1/galleries`, `GET /v1/images`
+- bookings, products and orders: see the [API reference](/api-reference)
+
+Public endpoints for browser use without a key: `/v1/public/availability`,
+`/v1/public/bookings`, `/v1/public/products`, `POST /v1/contact-forms`,
+`POST /v1/newsletters/subscribe` (all take `?project_id=`).

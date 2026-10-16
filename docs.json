@@ -2,7 +2,7 @@
   "$schema": "https://mintlify.com/docs.json",
   "theme": "mint",
   "name": "Neural Draft",
-  "description": "The AI-native backend platform. CMS, blog, social, booking and commerce primitives for AI-built sites — wired into Lovable, Claude Code, Cursor, v0 and Bolt via MCP.",
+  "description": "Hosting, CMS, blog, bookings, forms and a shop for sites built with Claude, ChatGPT, Codex or your own code: hosted connector, developer MCP, REST API and TypeScript SDK.",
   "colors": {
     "primary": "#7C3AED",
     "light": "#A78BFA",
@@ -29,19 +29,35 @@
     "family": "Inter"
   },
   "api": {
-    "openapi": ["openapi.yaml"],
+    "openapi": [
+      "openapi.yaml"
+    ],
     "playground": {
       "display": "interactive"
     },
     "examples": {
-      "languages": ["curl", "node", "python", "php"]
+      "languages": [
+        "curl",
+        "node",
+        "python",
+        "php"
+      ]
     }
   },
   "navbar": {
     "links": [
-      { "label": "Changelog", "href": "/changelog" },
-      { "label": "Pricing", "href": "https://neuraldraft.io/pricing" },
-      { "label": "Status", "href": "https://status.neuraldraft.io" }
+      {
+        "label": "Changelog",
+        "href": "/changelog"
+      },
+      {
+        "label": "Pricing",
+        "href": "https://neuraldraft.io/pricing"
+      },
+      {
+        "label": "For developers",
+        "href": "https://neuraldraft.io/developers"
+      }
     ],
     "primary": {
       "type": "button",
@@ -63,33 +79,52 @@
             ]
           },
           {
-            "group": "Guides",
+            "group": "Build with AI",
             "pages": [
-              "pricing-and-credits",
-              "errors",
-              "rate-limits",
-              "webhooks",
-              "guides/stripe-connect-setup",
-              "migration-from-saas"
+              "guides/hosted-connector",
+              "mcp/overview",
+              "mcp/setup",
+              "mcp/multi-workspace",
+              "mcp/tools-and-resources"
             ]
           },
           {
-            "group": "Pillars",
+            "group": "Sites",
+            "pages": [
+              "guides/hosted-sites",
+              "guides/editable-markup",
+              "guides/client-editing",
+              "guides/languages",
+              "guides/embeds-and-cors",
+              "guides/custom-domains"
+            ]
+          },
+          {
+            "group": "Agencies",
+            "pages": [
+              "guides/agencies"
+            ]
+          },
+          {
+            "group": "Features",
             "pages": [
               "pillars/cms",
               "pillars/galleries",
               "pillars/blog",
-              "pillars/social",
               "pillars/booking",
-              "pillars/commerce"
+              "pillars/commerce",
+              "guides/shop-and-payments",
+              "pillars/social"
             ]
           },
           {
-            "group": "MCP",
+            "group": "SDK and API",
             "pages": [
-              "mcp/overview",
-              "mcp/setup",
-              "mcp/tools-and-resources"
+              "sdk",
+              "pricing-and-credits",
+              "errors",
+              "rate-limits",
+              "webhooks"
             ]
           },
           {
@@ -99,8 +134,8 @@
               "frameworks/astro",
               "frameworks/nuxt",
               "frameworks/vanilla",
-              "frameworks/lovable",
-              "frameworks/cursor"
+              "frameworks/cursor",
+              "frameworks/lovable"
             ]
           }
         ]
@@ -111,7 +146,9 @@
       },
       {
         "tab": "Changelog",
-        "pages": ["changelog"]
+        "pages": [
+          "changelog"
+        ]
       }
     ],
     "global": {
@@ -139,33 +176,69 @@
       {
         "header": "Product",
         "items": [
-          { "label": "Pricing", "href": "https://neuraldraft.io/pricing" },
-          { "label": "Changelog", "href": "/changelog" },
-          { "label": "Status", "href": "https://status.neuraldraft.io" }
+          {
+            "label": "Pricing",
+            "href": "https://neuraldraft.io/pricing"
+          },
+          {
+            "label": "Changelog",
+            "href": "/changelog"
+          },
+          {
+            "label": "Status",
+            "href": "https://status.neuraldraft.io"
+          }
         ]
       },
       {
         "header": "Resources",
         "items": [
-          { "label": "SDK on GitHub", "href": "https://github.com/vbalagovic/neuraldraft-sdk" },
-          { "label": "MCP on npm", "href": "https://www.npmjs.com/package/@neuraldraft/mcp" },
-          { "label": "API reference", "href": "/api-reference" },
-          { "label": "Quickstart", "href": "/quickstart" }
+          {
+            "label": "SDK on GitHub",
+            "href": "https://github.com/vbalagovic/neuraldraft-sdk"
+          },
+          {
+            "label": "MCP on npm",
+            "href": "https://www.npmjs.com/package/@neuraldraft/mcp"
+          },
+          {
+            "label": "API reference",
+            "href": "/api-reference"
+          },
+          {
+            "label": "Quickstart",
+            "href": "/quickstart"
+          }
         ]
       },
       {
         "header": "Community",
         "items": [
-          { "label": "Discord", "href": "https://discord.gg/XCQftzvBQX" },
-          { "label": "GitHub issues", "href": "https://github.com/vbalagovic/neuraldraft-sdk/issues" }
+          {
+            "label": "Discord",
+            "href": "https://discord.gg/XCQftzvBQX"
+          },
+          {
+            "label": "GitHub issues",
+            "href": "https://github.com/vbalagovic/neuraldraft-sdk/issues"
+          }
         ]
       },
       {
         "header": "Company",
         "items": [
-          { "label": "Contact", "href": "mailto:info@neuraldraft.io" },
-          { "label": "Terms", "href": "https://neuraldraft.io/legal/terms" },
-          { "label": "Privacy", "href": "https://neuraldraft.io/legal/privacy" }
+          {
+            "label": "Contact",
+            "href": "mailto:info@neuraldraft.io"
+          },
+          {
+            "label": "Terms",
+            "href": "https://neuraldraft.io/legal/terms"
+          },
+          {
+            "label": "Privacy",
+            "href": "https://neuraldraft.io/legal/privacy"
+          }
         ]
       }
     ]
@@ -186,8 +259,21 @@
     }
   },
   "redirects": [
-    { "source": "/api", "destination": "/api-reference" },
-    { "source": "/docs", "destination": "/" },
-    { "source": "/sdk", "destination": "/frameworks/nextjs" }
+    {
+      "source": "/api",
+      "destination": "/api-reference"
+    },
+    {
+      "source": "/docs",
+      "destination": "/"
+    },
+    {
+      "source": "/migration-from-saas",
+      "destination": "/introduction"
+    },
+    {
+      "source": "/guides/stripe-connect-setup",
+      "destination": "/guides/shop-and-payments"
+    }
   ]
 }

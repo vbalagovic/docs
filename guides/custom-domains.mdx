@@ -1,0 +1,52 @@
+---
+title: "Custom domains"
+description: "Put a hosted site on your own domain with a CNAME and a TXT record. HTTPS is automatic."
+---
+
+A hosted site is always live at `https://<name>.neuraldraft.io`. On **Solo**
+and **Studio** (and agency client workspaces) you can add your own domain, for
+example `www.example.com` for the website or `blog.example.com` for a
+blog-only site.
+
+## Connect
+
+Ask the [hosted connector](/guides/hosted-connector):
+
+> Connect www.example.com to my site.
+
+`connect_custom_domain` with `domain: "www.example.com"` returns two DNS
+records, plus steps for Namecheap, GoDaddy, Cloudflare and others:
+
+| Type | Name | Value |
+| --- | --- | --- |
+| `CNAME` | `www` | the target the tool returns |
+| `TXT` | `_neuraldraft.www` | a value unique to your workspace (proves the domain is yours) |
+
+The admin has the same flow under **Settings → For developers → Domain and
+other websites**.
+
+## Verify
+
+Add both records at your DNS provider, then:
+
+> Check www.example.com.
+
+`connect_custom_domain` with `check: true` reports `status`. When both records
+are found the domain becomes `active` and HTTPS is issued automatically;
+there is no certificate to upload. DNS changes can take up to an hour. Until
+then the site keeps working on the `neuraldraft.io` address.
+
+## Notes
+
+- On the Free plan the tool answers with the upgrade options instead of DNS
+  steps.
+- On Cloudflare, set the CNAME to **DNS only** (grey cloud).
+- Remove any other A, AAAA or CNAME record with the same name first.
+- Root domains (`example.com`, TXT name `_neuraldraft`): most registrars can't
+  put a CNAME on the root. Use `www` for the site and redirect the root to it
+  at the registrar; Cloudflare can keep the root because it flattens the
+  CNAME.
+- A connected domain is automatically an allowed origin for
+  [nd.js blocks](/guides/embeds-and-cors).
+- If someone else's workspace claimed the domain first, the TXT record decides:
+  whoever adds the record for their workspace wins.

@@ -1,218 +1,126 @@
 ---
 title: "Booking"
-description: "Bookable services, weekly availability, slot lookup, public booking flow, Stripe-paid bookings, and an embeddable widget."
+description: "Bookable services, availability, the booking calendar block, public booking endpoints and the admin booking lifecycle."
 ---
 
-The Booking pillar is a Cal.com-replacement that an AI tool can drop into a
-Lovable-built site without you wiring anything. It supports two booking
-shapes:
+Customers book a time (appointments, classes, consultations) or a date range
+(rentals, stays) on the site. Bookings are part of Solo, Studio and agency
+client workspaces and use no credits.
 
-- **Time-slot bookings** — appointments, classes, consultations.
-- **Date-range bookings** — rentals, multi-night stays.
+The quickest path is the block, which works on hosted sites and, with the
+origin allowed, on [sites hosted elsewhere](/guides/embeds-and-cors):
 
-Both come with weekly availability rules, per-day overrides, calendar feed
-sync (Airbnb, Booking.com, VRBO, iCal), and optional Stripe-paid
-upfront-payment flows.
+```html
+<script src="/_nd/nd.js" defer></script>
+<nd-booking service="consultation"></nd-booking>
+```
 
-## What this gives you
+The workspace also has a hosted booking page on its address.
 
-- **Bookable services** with price, currency, duration (or min/max nights),
-  buffers, advance/notice rules, cancellation policy.
-- **Availability** — weekly recurring schedule + date overrides + blocked dates.
-- **Public lookup** — list services, list available dates and slots, all
-  without auth.
-- **Public booking flow** — `POST /v1/public/bookings` with rate limiting and
-  optional Stripe Checkout.
-- **Admin lifecycle** — confirm, cancel, complete, no-show, and stats.
-- **Calendar sync** — pull external feeds in; we block matching dates so
-  double-booking is impossible.
-- **Embeddable widget** — drop a `<script>` tag and a `<div>` to render a
-  multi-step booking widget on any page.
-
-## Quick example
-
-A common shape: list services publicly, fetch slots for a given date, create
-a booking, surface a confirmation reference back to the user.
+## Set up a service
 
 <CodeGroup>
 
 ```bash cURL
-# List services (public, no auth)
-curl "https://api.neuraldraft.io/v1/public/services?project_id=$PROJECT_ID"
-
-# Available slots for a given date
-curl "https://api.neuraldraft.io/v1/public/services/30-min-consult/availability/slots?date=2026-04-25"
-
-# Create a booking
-curl -X POST https://api.neuraldraft.io/v1/public/bookings \
-  -H "Content-Type: application/json" \
-  -d '{
-    "service_id": 12,
-    "starts_at": "2026-04-25T14:00:00Z",
-    "customer_name": "Ada Lovelace",
-    "customer_email": "ada@example.com",
-    "customer_phone": "+44 7000 000 000",
-    "customer_notes": "First-time consult"
-  }'
-```
-
-```ts SDK (admin-side)
-import { NeuralDraftClient } from "@neuraldraft/sdk";
-
-const nd = new NeuralDraftClient({ apiKey: process.env.NEURALDRAFT_API_KEY! });
-
-// List + read services
-const { data: services } = await nd.booking.listServices({
-  status: "active",
-  page_size: 50,
-});
-const consult = await nd.booking.getService("30-min-consult");
-
-// Generate the embed snippet for a service.
-// `getWidget` takes BOTH ids — read tenant id from `nd.projects.me()` once.
-const me = await nd.projects.me();
-const embed = await nd.booking.getWidget(me.id, consult.id);
-console.log(embed.embed_html);
-// '<script src="https://api.neuraldraft.io/v1/widgets/booking/{tenant}/{service}.js"
-//   async data-neuraldraft-booking="12"></script>'
-```
-
-</CodeGroup>
-
-## Common workflows
-
-### 1. Define a bookable service
-
-```bash
-curl -X POST https://api.neuraldraft.io/v1/services \
+curl -X POST https://api.neuraldraft.io/v1/bookable-services \
   -H "Authorization: Bearer $NEURALDRAFT_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
-    "name": "30-minute consultation",
-    "slug": "30-min-consult",
-    "description": "Free 30-minute discovery call.",
-    "price": 0,
-    "currency": "gbp",
+    "name": "Sourdough workshop",
     "booking_type": "time_slot",
-    "duration_minutes": 30,
-    "buffer_after_minutes": 5,
+    "duration_minutes": 120,
+    "price": 4500,
+    "currency": "gbp",
+    "max_bookings_per_slot": 8,
     "min_notice_hours": 24,
-    "max_advance_days": 30,
-    "cancellation_hours": 12,
     "status": "active"
   }'
 ```
 
-Set `price: 0` for free services or any positive integer (in cents) to charge
-via Stripe Checkout. Paid services require Stripe Connect to be onboarded —
-see [commerce](/pillars/commerce).
+```ts SDK
+const service = await nd.booking.createService({
+  name: "Sourdough workshop",
+  booking_type: "time_slot",
+  duration_minutes: 120,
+  price: 4500,
+  currency: "gbp",
+  max_bookings_per_slot: 8,
+});
+```
 
-### 2. Set the weekly availability
+</CodeGroup>
+
+Other fields: `buffer_before_minutes`, `buffer_after_minutes`,
+`max_advance_days`, `cancellation_hours`, `min_nights` / `max_nights` (for
+`date_range`), `images`, `color`. Opening hours and blocked dates are set in
+the admin (Customers → Bookings) or with `set_availability` on the
+[hosted connector](/guides/hosted-connector). Workspace-wide settings:
+`GET/PATCH /v1/booking/settings`.
+
+## Availability and booking (public, no key)
 
 ```bash
-curl -X PUT https://api.neuraldraft.io/v1/services/12/availability \
-  -H "Authorization: Bearer $NEURALDRAFT_API_KEY" \
+# Free times for a service
+curl "https://api.neuraldraft.io/v1/public/availability?project_id=$PROJECT_ID&service_id=12&from=2026-10-20&to=2026-10-26"
+
+# Book one
+curl -X POST "https://api.neuraldraft.io/v1/public/bookings?project_id=$PROJECT_ID" \
   -H "Content-Type: application/json" \
   -d '{
-    "schedule": [
-      { "day": 1, "start": "09:00", "end": "17:00" },
-      { "day": 2, "start": "09:00", "end": "17:00" },
-      { "day": 3, "start": "09:00", "end": "17:00" },
-      { "day": 4, "start": "09:00", "end": "17:00" },
-      { "day": 5, "start": "09:00", "end": "13:00" }
-    ]
+    "service_id": 12,
+    "starts_at": "2026-10-24T10:00:00+01:00",
+    "customer_name": "Oliver Bennett",
+    "customer_email": "oliver@example.com",
+    "customer_notes": "Two people"
   }'
+
+# Look it up later
+curl "https://api.neuraldraft.io/v1/public/bookings/BK-20261024-AB12?project_id=$PROJECT_ID&email=oliver@example.com"
 ```
 
-Days are 0 (Sunday) to 6 (Saturday). Times are 24-hour, project timezone (set
-in `/v1/booking-settings`).
+These endpoints are rate limited per IP (5 a minute). A slot taken in the
+meantime returns `409 slot_unavailable`: refresh availability and let the
+customer pick again.
 
-### 3. Block specific dates
+## Manage bookings (API key)
 
-```bash
-curl -X POST https://api.neuraldraft.io/v1/services/12/availability/blocks \
-  -H "Authorization: Bearer $NEURALDRAFT_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"date":"2026-04-22"}'
-```
+<CodeGroup>
 
-### 4. Drop the booking widget into a page
-
-The fastest path. The MCP server can do this for you in one tool call; or
-manually:
-
-```html
-<div data-nd-widget="booking" data-service-id="12" data-theme="auto"></div>
-<script src="https://widgets.neuraldraft.io/v1/booking.js" defer></script>
-```
-
-The widget reads your brand colors and fonts automatically; the user picks a
-date, picks a slot, fills the form, and confirms. Stripe Checkout flows are
-handled inline.
-
-### 5. Sync external calendars
-
-Pull-in Airbnb / Booking.com / VRBO / iCal feeds so dates blocked elsewhere
-can't be double-booked here.
-
-```bash
-curl -X POST https://api.neuraldraft.io/v1/services/12/calendar-feeds \
-  -H "Authorization: Bearer $NEURALDRAFT_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "Airbnb",
-    "platform": "airbnb",
-    "feed_url": "https://www.airbnb.com/calendar/ical/123.ics?s=...",
-    "sync_interval_minutes": 30
-  }'
-```
-
-We sync on a schedule and surface `last_sync_status` on the resource.
-
-### 6. Confirm or cancel from the admin
-
-```bash
-curl -X POST https://api.neuraldraft.io/v1/bookings/452/confirm \
+```bash cURL
+curl "https://api.neuraldraft.io/v1/bookings?status=pending" \
   -H "Authorization: Bearer $NEURALDRAFT_API_KEY"
 
-curl -X POST https://api.neuraldraft.io/v1/bookings/452/cancel \
-  -H "Authorization: Bearer $NEURALDRAFT_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"reason":"Customer requested rescheduling"}'
+curl -X POST https://api.neuraldraft.io/v1/bookings/452/confirm \
+  -H "Authorization: Bearer $NEURALDRAFT_API_KEY"
 ```
 
-The customer-facing equivalents (`/v1/public/bookings/{ref}/cancel`)
-enforce your cancellation policy; the admin path overrides it.
-
-### 7. Subscribe to lifecycle events
-
-```bash
-curl -X POST https://api.neuraldraft.io/v1/webhook-endpoints \
-  -H "Authorization: Bearer $NEURALDRAFT_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "url": "https://example.com/api/neural-draft",
-    "events": ["booking.confirmed", "booking.cancelled", "booking.completed"]
-  }'
+```ts SDK
+const { data: upcoming } = await nd.bookings.list({ status: "confirmed" });
+await nd.bookings.confirm(452);
+await nd.bookings.cancel(453);
 ```
 
-Use these to fire SMS reminders, sync to your CRM, or post to a Slack channel.
+</CodeGroup>
+
+Lifecycle: `confirm`, `cancel`, `complete`, `no-show`. Also
+`GET /v1/bookings/calendar`, `GET /v1/bookings/stats`, and an admin-side lookup
+`GET /v1/availability?service_id=&from=&to=`. Webhooks: `booking.confirmed`,
+`booking.cancelled`, `booking.completed`.
+
+Calendar export: each workspace has a private iCal feed
+(`/v1/public/calendar/{token}.ics`) for Google or Apple Calendar; find the
+link in the admin.
 
 ## Reference
 
-| Endpoint                                                  | Tag                                      |
-| --------------------------------------------------------- | ---------------------------------------- |
-| `GET /v1/services`                                        | [Booking](/api-reference#tag/Booking)    |
-| `POST /v1/services`                                       | [Booking](/api-reference#tag/Booking)    |
-| `GET /v1/services/{id}/availability`                      | [Booking](/api-reference#tag/Booking)    |
-| `PUT /v1/services/{id}/availability`                      | [Booking](/api-reference#tag/Booking)    |
-| `GET /v1/services/{id}/availability/dates`                | [Booking](/api-reference#tag/Booking)    |
-| `GET /v1/services/{id}/availability/slots`                | [Booking](/api-reference#tag/Booking)    |
-| `GET /v1/bookings`                                        | [Booking](/api-reference#tag/Booking)    |
-| `POST /v1/bookings/{id}/confirm`                          | [Booking](/api-reference#tag/Booking)    |
-| `POST /v1/bookings/{id}/cancel`                           | [Booking](/api-reference#tag/Booking)    |
-| `POST /v1/bookings/{id}/complete`                         | [Booking](/api-reference#tag/Booking)    |
-| `GET /v1/booking-settings`                                | [Booking](/api-reference#tag/Booking)    |
-| `POST /v1/services/{id}/calendar-feeds`                   | [Booking](/api-reference#tag/Booking)    |
-| `GET /v1/public/services`                                 | [Booking](/api-reference#tag/Booking)    |
-| `POST /v1/public/bookings`                                | [Booking](/api-reference#tag/Booking)    |
+| Endpoint | Scope |
+| --- | --- |
+| `GET/POST /v1/bookable-services`, `GET/PATCH/DELETE /v1/bookable-services/{id}` | `booking:read` / `booking:write` |
+| `GET /v1/availability` | `booking:read` |
+| `GET/PATCH /v1/booking/settings` | `booking:read` / `booking:write` |
+| `GET/POST /v1/bookings`, `GET/PATCH/DELETE /v1/bookings/{id}` | `booking:read` / `booking:write` |
+| `POST /v1/bookings/{id}/confirm` | `booking:confirm` |
+| `POST /v1/bookings/{id}/cancel` | `booking:cancel` |
+| `POST /v1/bookings/{id}/complete`, `/no-show` | `booking:write` |
+| `GET /v1/bookings/calendar`, `/stats` | `booking:read` |
+| `GET /v1/public/availability`, `GET /v1/public/services/{id}`, `POST /v1/public/bookings`, `GET /v1/public/bookings/{ref}` | none (`?project_id=`) |

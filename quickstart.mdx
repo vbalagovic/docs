@@ -1,191 +1,101 @@
 ---
 title: "Quickstart"
-description: "Get a working Neural Draft integration — key, SDK, first API call — in under five minutes."
+description: "A workspace, an API key, your first API call, then Neural Draft in your AI assistant."
 ---
 
-You'll go from zero to a real, server-acknowledged blog post in five steps. The
-last step is optional but unlocks the part our customers love most: AI codegen
-tools that generate Neural Draft-native code without you teaching them.
-
 <Steps>
-  <Step title="Create a project">
-    Sign up at [app.neuraldraft.io/register](https://app.neuraldraft.io/register).
-    The form takes ~90 seconds and asks for the bare minimum: project name,
-    industry, brand voice, brand colors, target languages, and target audience.
-    These six fields populate your **brand context** — the canonical resource
-    every AI tool reads before it generates anything.
-
-    <Tip>
-      Already have a project? Skip ahead to step 2.
-    </Tip>
+  <Step title="Create a workspace">
+    Sign up at [app.neuraldraft.io/register](https://app.neuraldraft.io/register)
+    (or add the [hosted connector](/guides/hosted-connector) to Claude or
+    ChatGPT and sign in: new accounts get a free workspace). Your site is live
+    at `<name>.neuraldraft.io` from the start.
   </Step>
 
-  <Step title="Get your API key">
-    From the dashboard, open **Settings → API keys → Create key**. Pick a name
-    (e.g. `dev-laptop`) and the scopes you need.
+  <Step title="Create an API key">
+    In the admin open **Settings → For developers → API keys → Create key**.
+    Give it a name (`vercel-prod`, `claude-code-laptop`) and either full access
+    or only the [scopes](/authentication#scopes) it needs.
 
-    Your key looks like this:
-
-    ```
-    ndsk_live_2NgcaXxFqLPo7K3vR8zHwT5sE9bM1nDc
-    ```
-
-    The prefix tells you the environment: `ndsk_live_` is production,
-    `ndsk_test_` is the sandbox. Keys are shown **once** — copy them straight
-    into your secret manager.
-
-    <Warning>
-      Never commit a key to git. Use environment variables, a secret manager,
-      or your platform's encrypted env (Vercel, Fly, Render). Compromised keys
-      can be rotated from the dashboard at any time.
-    </Warning>
-
-    Now export it for the rest of this guide:
+    Keys look like `ndsk_live_…`, are shown **once**, and only reach their own
+    workspace. Keep them server-side.
 
     ```bash
-    export NEURALDRAFT_API_KEY=ndsk_live_2NgcaXxFqLPo7K3vR8zHwT5sE9bM1nDc
+    export NEURALDRAFT_API_KEY=ndsk_live_...
     ```
   </Step>
 
-  <Step title="Install the SDK (recommended)">
-    Every endpoint is also a plain HTTP call — `fetch`, `axios`, `cURL` all
-    work — but the official TypeScript SDK gives you typed inputs, typed
-    responses, and a `jobs.poll()` helper for the async pipelines.
-
-    ```bash
-    npm install @neuraldraft/sdk
-    ```
-
-    <Tip>
-      The SDK targets Node 20+, Bun, and modern browsers (server-side; never
-      ship the API key to the client). Python and PHP SDKs are on the roadmap —
-      until they land, use cURL or `requests` against the OpenAPI spec at
-      `https://api.neuraldraft.io/v1/openapi.yaml`.
-    </Tip>
-  </Step>
-
-  <Step title="Make your first call">
-    A round trip: verify the key, then create a draft blog post.
-
+  <Step title="Make a call">
     <CodeGroup>
 
+    ```bash cURL
+    curl https://api.neuraldraft.io/v1/projects/me \
+      -H "Authorization: Bearer $NEURALDRAFT_API_KEY"
+
+    # Read the site's editable texts (the same values clients edit)
+    curl "https://api.neuraldraft.io/v1/content?lang=en&page_size=20" \
+      -H "Authorization: Bearer $NEURALDRAFT_API_KEY"
+    ```
+
     ```ts SDK
+    // npm install @neuraldraft/sdk
     import { NeuralDraftClient } from "@neuraldraft/sdk";
 
-    const nd = new NeuralDraftClient({
-      apiKey: process.env.NEURALDRAFT_API_KEY!,
-    });
+    const nd = new NeuralDraftClient({ apiKey: process.env.NEURALDRAFT_API_KEY! });
 
-    // Verify the key
     const me = await nd.projects.me();
-    console.log(`Hello, ${me.name}`);
+    console.log(`Hello, ${me.name} (${me.domain})`);
 
-    // Create a draft blog post
+    // A draft blog post you wrote yourself: free
     const post = await nd.blogPosts.create({
       title: "Five things we shipped this week",
       content: "<p>It was a busy week.</p>",
       language_code: "en",
       status: "draft",
     });
-
-    console.log(`Draft created: /blog/${post.slug}`);
-    ```
-
-    ```bash cURL
-    # Verify the key
-    curl https://api.neuraldraft.io/v1/projects/me \
-      -H "Authorization: Bearer $NEURALDRAFT_API_KEY"
-
-    # Create a draft blog post — note the discriminator: type=manual
-    curl https://api.neuraldraft.io/v1/blog-posts \
-      -H "Authorization: Bearer $NEURALDRAFT_API_KEY" \
-      -H "Content-Type: application/json" \
-      -d '{
-        "type": "manual",
-        "title": "Five things we shipped this week",
-        "content": "<p>It was a busy week.</p>",
-        "language_code": "en",
-        "status": "draft"
-      }'
+    console.log(post.slug);
     ```
 
     </CodeGroup>
-
-    Expected response:
-
-    ```json
-    {
-      "id": 4711,
-      "slug": "five-things-we-shipped-this-week",
-      "status": "draft",
-      "title": "Five things we shipped this week",
-      "language_code": "en",
-      "category": null,
-      "tags": [],
-      "featured_image": null,
-      "published_at": null,
-      "scheduled_at": null,
-      "created_at": "2026-04-19T10:14:22Z",
-      "updated_at": "2026-04-19T10:14:22Z"
-    }
-    ```
-
-    Open `app.neuraldraft.io` and your draft is already there, ready to edit
-    or publish. **You're done with the API quickstart.**
   </Step>
 
-  <Step title="Optional — install the MCP server">
-    This is the part that unlocks the magic: your editor's AI starts generating
-    Neural Draft-native code automatically.
+  <Step title="Add Neural Draft to your AI assistant">
+    Two options, and you can use both.
 
-    Add the MCP server to Claude Code in one command:
+    **Hosted connector** (sign in, no key): build, deploy and edit the hosted
+    site, connect a domain, blog, bookings.
 
     ```bash
-    claude mcp add neural-draft --env NEURALDRAFT_API_KEY=$NEURALDRAFT_API_KEY -- npx -y @neuraldraft/mcp
+    claude mcp add --transport http neuraldraft https://neuraldraft.io/mcp
+    # Codex:
+    codex mcp add neuraldraft --url https://neuraldraft.io/mcp && codex mcp login neuraldraft
     ```
 
-    Or paste the snippet into `.cursor/mcp.json` for Cursor:
+    **Developer MCP** (`@neuraldraft/mcp`, uses your API key): brand context,
+    pages, content keys, components, galleries, blog, bookings while you code.
 
-    ```json
-    {
-      "mcpServers": {
-        "neural-draft": {
-          "command": "npx",
-          "args": ["-y", "@neuraldraft/mcp"],
-          "env": { "NEURALDRAFT_API_KEY": "ndsk_live_..." }
-        }
-      }
-    }
+    ```bash
+    claude mcp add neuraldraft-dev -e NEURALDRAFT_API_KEY=$NEURALDRAFT_API_KEY -- npx -y @neuraldraft/mcp
     ```
 
-    Restart your editor. Now ask the AI:
-
-    > _"Generate a hero section for this site and register it with Neural Draft."_
-
-    Watch it read `brand://current` for your colors and voice, generate the
-    HTML with `data-translate` keys baked in, and call `register_component` so
-    the section appears in your admin as editable. No glue code.
-
-    Full setup (Claude Code, Cursor, Continue, plus the Lovable / v0 / Bolt
-    workaround) is on the [MCP setup](/mcp/setup) page.
+    Then ask: *"Build the site in this folder, mark the texts editable, and
+    deploy dist/ to Neural Draft with deploy_site."* See
+    [Hosted sites](/guides/hosted-sites) and [MCP setup](/mcp/setup).
   </Step>
 </Steps>
 
-## What's next
+## Next
 
 <CardGroup cols={2}>
-  <Card title="Authentication" icon="key" href="/authentication">
-    Scopes, rotation, environment separation, and the full list of
-    `401`/`403` failure modes.
+  <Card title="Editable markup" icon="pen-ruler" href="/guides/editable-markup">
+    Make texts and pictures editable by your client.
   </Card>
-  <Card title="Pricing & credits" icon="credit-card" href="/pricing-and-credits">
-    What every operation costs and what happens when you hit zero.
+  <Card title="Embeds and CORS" icon="puzzle-piece" href="/guides/embeds-and-cors">
+    Booking, forms and shop on a site hosted elsewhere.
   </Card>
-  <Card title="The five pillars" icon="layer-group" href="/pillars/cms">
-    CMS, blog, social, booking, commerce — what each one gives you and the
-    workflows we see most often.
+  <Card title="Credits and pricing" icon="credit-card" href="/pricing-and-credits">
+    What costs credits (only our AI work) and what is free.
   </Card>
-  <Card title="Webhooks" icon="webhook" href="/webhooks">
-    Skip polling. Get an HTTP POST every time something changes.
+  <Card title="Agencies" icon="building" href="/guides/agencies">
+    One workspace per client, pooled credits, one MCP for all clients.
   </Card>
 </CardGroup>

@@ -1,12 +1,13 @@
 ---
 title: "Blog"
-description: "Posts, categories, tags, scheduling, multi-language translation, and the AI authoring pipeline."
+description: "Posts, categories, tags, scheduling, translations, and posts researched and written by Neural Draft."
 ---
 
 The Blog pillar is a full content engine — not a header-and-body table. Posts
 have categories and tags, scheduling, multi-language translations, featured
-images, SEO meta, and a research → write → image → translate → publish
-pipeline that runs as one async job.
+images, SEO meta, and an optional pipeline where Neural Draft researches,
+writes and illustrates a post and translates it, as one async job. Posts you
+(or your own AI) write are free.
 
 ## What this gives you
 
@@ -15,8 +16,11 @@ pipeline that runs as one async job.
   SEO meta.
 - **Categories** and **tags** with slugs, attached many-to-many.
 - **Scheduling** — set `scheduled_at` and we publish at the precise minute.
-- **AI authoring pipeline** — one POST kicks off topic research, writing,
-  image generation, translation to every target language, and SEO meta.
+- **Written by Neural Draft** — one POST (`type: "ai"`) researches, writes and
+  illustrates the post, adds SEO meta and translates it into the target
+  languages. Pass `generate_images: false` for a text-only post.
+- **Hosted blog** on the site address (and `blog.yourdomain.com` in
+  blog-only mode), plus `<nd-blog-feed>` for any page.
 
 ## Quick example
 
@@ -29,7 +33,7 @@ import { NeuralDraftClient } from "@neuraldraft/sdk";
 
 const nd = new NeuralDraftClient({ apiKey: process.env.NEURALDRAFT_API_KEY! });
 
-// Manual create (0 credits beyond plan post-quota). The SDK sets type="manual".
+// Manual create: free. The SDK sets type="manual".
 const post = await nd.blogPosts.create({
   title: "Five things we shipped this week",
   content: "<p>It was a busy week.</p>",
@@ -38,7 +42,7 @@ const post = await nd.blogPosts.create({
   status: "published",
 });
 
-// Async translate — returns a Job; 7 credits per language.
+// Async translate by Neural Draft — returns a Job; 10 credits per language.
 const job = await nd.blogPosts.translate(post.id, ["fr"]);
 await nd.jobs.poll(job.id);
 ```
@@ -105,9 +109,8 @@ curl -X POST https://api.neuraldraft.io/v1/blog-posts \
   }'
 ```
 
-Cost: **60 credits** for the post itself (`blog_post` — covers research,
-draft, and featured image). Per-language translations charge **7 credits
-each** (`translate_language`) on top, billed when each language lands.
+Cost: **60 credits** for the post (`blog_post`: research, writing and its
+images). Each extra language is **10 credits** (`translate_language`).
 
 ### 2. Schedule a post for next Tuesday
 
@@ -154,7 +157,8 @@ const job = await nd.blogPosts.translate(4711, ["es", "it"]);
 await nd.jobs.poll(job.id);
 ```
 
-Cost: **7 credits per language** (`translate_language`).
+Cost: **10 credits per language** (`translate_language`). Writing the
+translation with your own assistant and saving it with `update` is free.
 
 ### 5. Lifecycle helpers
 
@@ -173,18 +177,14 @@ const { data: drafts } = await nd.blogPosts.list({
 
 ## Reference
 
-| Endpoint                                          | Tag                                            |
-| ------------------------------------------------- | ---------------------------------------------- |
-| `GET /v1/blog-posts`                              | [Blog](/api-reference#tag/Blog)                |
-| `POST /v1/blog-posts`                             | [Blog](/api-reference#tag/Blog)                |
-| `GET /v1/blog-posts/{slug}`                       | [Blog](/api-reference#tag/Blog)                |
-| `PUT /v1/blog-posts/{id}`                         | [Blog](/api-reference#tag/Blog)                |
-| `POST /v1/blog-posts/{id}/publish`                | [Blog](/api-reference#tag/Blog)                |
-| `POST /v1/blog-posts/{id}/schedule`               | [Blog](/api-reference#tag/Blog)                |
-| `POST /v1/blog-posts/{id}/unpublish`              | [Blog](/api-reference#tag/Blog)                |
-| `GET /v1/blog-posts/{id}/translations`            | [Blog](/api-reference#tag/Blog)                |
-| `PUT /v1/blog-posts/{id}/translations/{lang}`     | [Blog](/api-reference#tag/Blog)                |
-| `GET /v1/categories`                              | [Blog](/api-reference#tag/Blog)                |
-| `GET /v1/tags`                                    | [Blog](/api-reference#tag/Blog)                |
-| `POST /v1/jobs` (`blog_post.generate`)            | [Jobs](/api-reference#tag/Jobs)                |
-| `GET /v1/blog/topic-suggestions`                  | [Blog](/api-reference#tag/Blog)                |
+| Endpoint | Scope |
+| --- | --- |
+| `GET /v1/blog-posts`, `GET /v1/blog-posts/{id_or_slug}` | `blog:read` |
+| `POST /v1/blog-posts` (`type: "manual"` or `"ai"`) | `blog:write` |
+| `PATCH /v1/blog-posts/{id}`, `DELETE /v1/blog-posts/{id}` | `blog:write` |
+| `POST /v1/blog-posts/{id}/publish` | `blog:publish` |
+| `POST /v1/blog-posts/{id}/unpublish`, `/schedule` | `blog:write` |
+| `POST /v1/blog-posts/{id}/translate` (`target_languages`) or `/translations` (`language_code`) | `blog:write` |
+| `GET/POST /v1/blog-posts/categories`, `PATCH/DELETE /v1/blog-posts/categories/{id}` | `blog:read` / `blog:write` |
+| `GET/POST /v1/blog-posts/tags`, `PATCH/DELETE /v1/blog-posts/tags/{id}` | `blog:read` / `blog:write` |
+| `GET /v1/jobs/{id}`, `GET /v1/jobs/{id}/stream` | `jobs:read` |

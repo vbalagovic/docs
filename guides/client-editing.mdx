@@ -1,0 +1,47 @@
+---
+title: "Client editing"
+description: "How the people who own the site change it: the visual editor in the admin, or by asking Claude or ChatGPT."
+---
+
+You build the site; the client keeps it current. They can only change the
+blocks that are editable (every text and picture on published pages, the
+[marked blocks](/guides/editable-markup) on a deployed site), so the design
+and code stay yours.
+
+## Visual editor (Website → Edit site)
+
+In the admin at [app.neuraldraft.io](https://app.neuraldraft.io):
+
+1. **Website → Edit site** opens the live site with every editable text and
+   picture highlighted.
+2. Click a text to change it, click a picture to replace it. Changes are saved
+   as drafts and stay private.
+3. **Publish** puts the drafts live at once (no redeploy). **Discard** drops
+   them.
+4. Every publish can be **undone** from the history panel.
+5. With several languages, a language picker edits each language's values.
+
+**Website → Content** shows the same blocks as a list, page by page.
+Pages, photos, forms and galleries have their own tabs under Website.
+
+## By chat
+
+The client adds the [hosted connector](/guides/hosted-connector) in Claude
+(web, desktop, phone) or ChatGPT and signs in with their own email. Then:
+
+> Change our opening hours to 6–14 and swap the hero photo for the one I just
+> attached.
+
+The assistant lists the editable blocks (`list_site_texts`), changes them
+(`update_site_text`, after a confirmation) and links to the live page. A
+connection only reaches the workspaces that person belongs to.
+
+Pages published with `publish_site_page` can also be reverted
+(`revert_site_page`), and a deployed site rolled back (`rollback_site`).
+
+## Inviting the client
+
+Settings → **Team** in the admin, or `invite_teammate` in the chat. Roles are
+Admin and Member (a member can do everything except manage the team). For
+agency clients the invitation goes out in the agency's name; see
+[Agencies](/guides/agencies).

@@ -169,53 +169,23 @@ Kick off the full blog generation pipeline. Returns a job id; poll or stream.
 {
   "name": "generate_blog_post",
   "input": {
-    "topic": "How to choose a CMS for AI-built sites",
-    "tone": "friendly_professional",
-    "length": "medium",
-    "translate_to_all_languages": true
-  },
-  "output": {
-    "job_id": "job_2NgcaXxFqLPo",
-    "status_url": "https://api.neuraldraft.io/v1/jobs/job_2NgcaXxFqLPo",
-    "estimated_credits": 60
+    "topic": "How to choose a sourdough starter",
+    "style": "educational",
+    "word_count": 1200,
+    "translate_to_all": true
   }
 }
 ```
 
-### `generate_image`
+Returns a job; poll `get_job`. Costs 60 credits for the post (researched,
+written, with images) plus 10 credits per extra language.
 
-Brand-consistent image generation. Returns a job id; poll for the URL.
+### `generate_image` (retired)
 
-```json
-{
-  "name": "generate_image",
-  "input": {
-    "prompt": "A founder typing on a laptop in a sunlit cafe, soft focus",
-    "aspect_ratio": "16:9",
-    "key": "hero.background"
-  },
-  "output": {
-    "job_id": "job_2Nh4PqRsTuVw",
-    "status_url": "https://api.neuraldraft.io/v1/jobs/job_2Nh4PqRsTuVw"
-  }
-}
-```
-
-### `connect_social_account`
-
-Returns the OAuth URL the AI surfaces to the user. They click, authorize,
-return; the AI can then call `social_post.publish`.
-
-```json
-{
-  "name": "connect_social_account",
-  "input": { "platform": "instagram" },
-  "output": {
-    "oauth_url": "https://app.neuraldraft.io/oauth/instagram?state=...",
-    "expires_in": 600
-  }
-}
-```
+The API answers `410 media_generation_moved`: we don't offer AI image or
+video creation. We craft finished static ads and reels for your brand through
+the hosted connector. To put a picture on a key use `register_image` (by URL)
+or upload it in the admin.
 
 ### `list_products` / `get_product`
 
@@ -224,17 +194,13 @@ page so the rendered fields match real data.
 
 ### `setup_booking_widget`
 
-Returns the embed snippet for a service. The AI inserts it into the page.
+Returns the embed HTML and script URL for a bookable service; the AI drops
+it into the page. Read-only, free. On sites hosted by Neural Draft (or with
+the origin allowed), the `<nd-booking service="slug">` block from
+[nd.js](/guides/embeds-and-cors) is the simpler choice.
 
 ```json
-{
-  "name": "setup_booking_widget",
-  "input": { "service_id": 42, "theme": "auto" },
-  "output": {
-    "snippet": "<div data-nd-widget=\"booking\" data-service-id=\"42\"></div>\n<script src=\"https://widgets.neuraldraft.io/v1/booking.js\" defer></script>",
-    "embed_url": "https://embed.neuraldraft.io/booking/42"
-  }
-}
+{ "name": "setup_booking_widget", "input": { "service_id": 42 } }
 ```
 
 ### `create_bookable_service`
@@ -334,25 +300,9 @@ identifier and return 204. **No undo.**
 | `delete_component`  | `id` (number)         | Hard delete; the HTML chunk is gone. Re-register via `register_component`. |
 | `delete_image`      | `key` (string)        | Removes the key→URL binding only. CDN bytes are untouched.       |
 
-### `generate_video`
+### `generate_video` (retired)
 
-Short-form clip generation. Returns a Job; poll `get_job` until complete.
-Two tiers — pick `budget` (default, Wan 2.1) for **40 credits** or
-`premium` (Kling v2.1 / Runway Gen4) for **300 credits**. Premium requires a
-**Build** plan or higher; Free / Hobby calling with `tier=premium` get
-`402 plan_required`.
-
-```json
-{
-  "name": "generate_video",
-  "input": {
-    "prompt": "slow-mo pour-over coffee, warm morning light, cinematic",
-    "aspect_ratio": "9:16",
-    "duration_seconds": 5,
-    "tier": "budget"
-  }
-}
-```
+Answers `410 media_generation_moved`, like `generate_image`.
 
 ### `get_brand` / `update_brand`
 
@@ -404,7 +354,7 @@ free.
     "period_end": "2026-05-31T23:59:59Z",
     "breakdown": [
       { "operation_type": "blog_post", "total_spent": 1200, "count": 20 },
-      { "operation_type": "image", "total_spent": 384, "count": 12 }
+      { "operation_type": "translate_language", "total_spent": 120, "count": 12 }
     ]
   }
 }
@@ -428,6 +378,13 @@ with `-`). Read-only, free.
 
 Example prompt: _"List my most-recent draft posts so I can decide which to
 publish first."_
+
+### `list_workspaces` / `switch_workspace` (0.4.0+)
+
+With several keys in `NEURALDRAFT_API_KEYS`, `list_workspaces` shows the
+configured names, the brand behind each key and the active one;
+`switch_workspace({ "workspace": "linden-bakery" })` changes the active
+workspace for every following call. See [Several workspaces](/mcp/multi-workspace).
 
 ### `find_workspaces`
 
@@ -479,7 +436,7 @@ executes — like a parameterised macro.
 
 ### `/scaffold-marketing-site`
 
-Generates a full Lovable/Next.js/Astro/Nuxt marketing site whose content lives
+Generates a full Next.js/Astro/SvelteKit/Nuxt marketing site whose content lives
 in Neural Draft.
 
 | Argument    | Notes                                                |
@@ -510,12 +467,6 @@ For static sites that already exist. Replaces hardcoded text with
 `{{ __('key') }}`-style fetches and adds `data-translate` attributes so the
 admin editor works.
 
-### `/add-booking-widget`
-
-Single-flow embed: AI calls `list_services`, asks the user to pick one, calls
-`setup_booking_widget`, then drops the snippet into the right place in the
-page.
-
 ## Annotations
 
 Each tool advertises [MCP annotations](https://spec.modelcontextprotocol.io/specification/server/tools/#tool-annotations)
@@ -526,8 +477,8 @@ so smart clients can surface confirm-prompts before destructive ops:
 | `register_component`        |            |               |              |
 | `create_translation_keys`   |            |               |       ✓      |
 | `generate_blog_post`        |            |               |              |
-| `generate_image`            |            |               |              |
-| `connect_social_account`    |     ✓      |               |       ✓      |
+| `list_workspaces`           |     ✓      |               |       ✓      |
+| `switch_workspace`          |            |               |       ✓      |
 | `list_products`             |     ✓      |               |       ✓      |
 | `get_product`               |     ✓      |               |       ✓      |
 | `setup_booking_widget`      |     ✓      |               |       ✓      |
@@ -543,10 +494,8 @@ so smart clients can surface confirm-prompts before destructive ops:
 
 ## Observability
 
-Every tool call is logged in your project's audit log under the synthetic
-agent `mcp:<machine-name>`. The dashboard's "MCP usage" pane shows the most
-common tool/resource calls and tail latency, so you can spot a misbehaving
-session.
+Every call is a normal `/v1` request with the workspace key, so it shows in
+the admin under Settings → For developers → API logs.
 
 ## Source
 

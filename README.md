@@ -36,7 +36,6 @@ docs-site/
 ├── errors.mdx                # error catalog and retry guidance
 ├── rate-limits.mdx           # rate limit headers and backoff
 ├── webhooks.mdx              # event topics and signature verification
-├── migration-from-saas.mdx   # for existing tenants
 ├── changelog.mdx             # release notes
 ├── mcp/                      # MCP server docs
 │   ├── overview.mdx

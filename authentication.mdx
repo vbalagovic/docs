@@ -1,289 +1,122 @@
 ---
 title: "Authentication"
-description: "Project API keys, scopes, rotation, and the failure modes you'll see when something is wrong."
+description: "Workspace API keys, scopes, revocation, and which surfaces need no key at all."
 ---
 
-Neural Draft uses a single auth model for the v1 Project API: a long-lived
-project key passed as a Bearer token. That's it — no OAuth dance, no
-short-lived JWTs, no per-user signing. One key per project per environment.
+The `/v1` API uses one auth model: a workspace API key sent as a Bearer token.
+Each key belongs to exactly one workspace and can only reach that workspace.
+
+| Surface | Auth |
+| --- | --- |
+| `/v1/*` REST API, the SDK, `@neuraldraft/mcp` | API key (`Authorization: Bearer ndsk_live_…`) |
+| Hosted connector `https://neuraldraft.io/mcp` (Claude, ChatGPT, Codex, Claude Code, Cursor) | Sign-in with Google or an emailed code (OAuth). No key. |
+| `nd.js` blocks and `/_nd/api/*` on a site | None. Public site data only, keyed by the site address. See [Embeds and CORS](/guides/embeds-and-cors). |
+| `/v1/public/*`, `/v1/contact-forms` (POST), `/v1/newsletters/subscribe` | None (tenant from `?project_id=`), rate limited per IP. |
 
 ## Key format
 
-Every key is prefixed with environment and scoped to a single project:
-
 ```
-ndsk_live_2NgcaXxFqLPo7K3vR8zHwT5sE9bM1nDc
-└─┬─┘ └─┬┘ └────────────────┬─────────────┘
-  │     │                   │
-  │     │                   └── 32-char random secret (base62)
-  │     └────────────────────── environment: live | test
-  └──────────────────────────── product prefix: ndsk = "Neural Draft Secret Key"
+ndsk_live_2NgcaXxFqLPo7K3vR8zHwT
 ```
 
-Use the prefix to spot-check intent at a glance: a `ndsk_test_` key in your
-production env is a clear bug. Our SDKs and dashboards both surface the prefix
-so it's hard to confuse the two.
+`ndsk_live_` followed by a random secret. We store only a hash, so a lost key
+cannot be recovered: create a new one.
 
-## Where to get a key
+## Creating a key
 
 <Steps>
-  <Step title="Open Settings → API keys">
-    From the dashboard at [app.neuraldraft.io](https://app.neuraldraft.io).
+  <Step title="Open the admin">
+    [app.neuraldraft.io](https://app.neuraldraft.io) → **Settings → For developers → API keys**.
   </Step>
-  <Step title="Click Create key">
-    Pick a memorable name (e.g. `vercel-prod`, `lovable-preview`,
-    `claude-code-laptop`). Future-you reading the audit log will thank present-you.
-  </Step>
-  <Step title="Choose the scopes">
-    Default is read+write across CMS, blog and social. Tighten to least
-    privilege when the key has a known job — for example, a static-site build
-    only needs `content:read` and `blog:read`.
+  <Step title="Create key">
+    Name it after where it lives (`vercel-prod`, `claude-code-laptop`). Pick
+    full access or individual scopes.
   </Step>
   <Step title="Copy it once">
-    Keys are shown **once**. Paste straight into your secret manager. We store
-    only a hash — we cannot recover a lost key.
+    Put it in your secret manager or `.env` (never in browser code or git).
   </Step>
 </Steps>
 
-## Sending the key
+You can also manage keys with the API: `GET/POST /v1/projects/me/api-keys` and
+`DELETE /v1/projects/me/api-keys/{id}`.
 
-A standard Bearer token in the `Authorization` header. No query-param fallback,
-no body field. HTTPS is required.
+## Sending the key
 
 <CodeGroup>
 
 ```bash cURL
 curl https://api.neuraldraft.io/v1/projects/me \
-  -H "Authorization: Bearer ndsk_live_..."
+  -H "Authorization: Bearer $NEURALDRAFT_API_KEY"
 ```
 
-```ts Node
-const res = await fetch("https://api.neuraldraft.io/v1/projects/me", {
-  headers: { Authorization: `Bearer ${process.env.NEURALDRAFT_API_KEY}` },
-});
+```ts SDK
+import { NeuralDraftClient } from "@neuraldraft/sdk";
+const nd = new NeuralDraftClient({ apiKey: process.env.NEURALDRAFT_API_KEY! });
+// or: const nd = NeuralDraftClient.fromEnv();  // reads NEURALDRAFT_API_KEY
 ```
 
 ```python Python
 import os, httpx
-
-r = httpx.get(
-    "https://api.neuraldraft.io/v1/projects/me",
-    headers={"Authorization": f"Bearer {os.environ['NEURALDRAFT_API_KEY']}"},
-)
-```
-
-```php PHP
-$ch = curl_init("https://api.neuraldraft.io/v1/projects/me");
-curl_setopt_array($ch, [
-    CURLOPT_RETURNTRANSFER => true,
-    CURLOPT_HTTPHEADER => ["Authorization: Bearer " . getenv('NEURALDRAFT_API_KEY')],
-]);
-$response = curl_exec($ch);
+r = httpx.get("https://api.neuraldraft.io/v1/projects/me",
+              headers={"Authorization": f"Bearer {os.environ['NEURALDRAFT_API_KEY']}"})
 ```
 
 </CodeGroup>
 
 ## Scopes
 
-Scopes are wildcard-prefixed. A key with `content:*` can do every action under
-`content`; `*` is full access (use it carefully — only for trusted backend
-services).
+A key has `*` (full access) or a list of scopes. `blog:*` grants every `blog:`
+scope.
 
-| Scope                   | What it covers                                                  |
-| ----------------------- | --------------------------------------------------------------- |
-| `*`                     | Full access. Equivalent to all scopes below.                    |
-| `project:read`          | Read project metadata, usage, key list.                         |
-| `project:write`         | Update project (e.g. webhook URL, target languages).            |
-| `project:admin`         | Mint/revoke API keys, change billing.                           |
-| `content:read`          | Read translation keys, components, pages.                       |
-| `content:write`         | Create/update/delete translations and components.               |
-| `brand:read`            | Read brand context (voice, colors, fonts, audience).            |
-| `brand:write`           | Patch brand context, upload logos.                              |
-| `images:read`           | Read media library and resolved image URLs.                     |
-| `images:write`          | Upload, generate, replace images.                               |
-| `blog:read`             | Read posts, categories, tags, translations.                     |
-| `blog:write`            | Create/update/delete posts, schedule, publish.                  |
-| `social:read`           | Read social posts and connected accounts.                       |
-| `social:write`          | Create/update/delete social posts.                              |
-| `social:publish`        | Publish a social post immediately to a connected platform.      |
-| `social:connect`        | Initiate OAuth flow, manage connected accounts.                 |
-| `booking:read`          | Read services, availability, bookings.                          |
-| `booking:write`         | Create/update services, availability, bookings.                 |
-| `booking:admin`         | Update booking settings (timezone, policies, reminders).        |
-| `commerce:read`         | Read products, variants, categories, orders.                    |
-| `commerce:write`        | Create/update/delete products, variants, categories, orders.    |
-| `commerce:admin`        | Refunds, Stripe Connect onboarding, manual orders.              |
-| `webhooks:read`         | List webhook endpoints and deliveries.                          |
-| `webhooks:write`        | Create/update/delete webhook endpoints.                         |
-| `jobs:read`             | Read job status (returned by all async ops).                    |
+| Scope | Covers |
+| --- | --- |
+| `brand:read` / `brand:write` | `GET` / `PATCH /v1/brand` |
+| `content:read` / `content:write` | `/v1/content` (site texts, translation keys) |
+| `components:read` / `components:write` | `/v1/components` |
+| `pages:read` / `pages:write` | `/v1/pages` |
+| `galleries:read` / `galleries:write` | `/v1/galleries` |
+| `images:read` / `images:write` | `/v1/images` |
+| `blog:read` / `blog:write` / `blog:publish` | `/v1/blog-posts`, categories, tags; publishing |
+| `social:read` / `social:write` / `social:publish` | `/v1/social-posts`, `/v1/social-accounts` |
+| `booking:read` / `booking:write` / `booking:confirm` / `booking:cancel` | services, availability, settings, bookings |
+| `commerce:read` / `commerce:write` | products, variants, categories |
+| `orders:read` / `orders:write` / `orders:refund` | `/v1/orders` |
+| `forms:read` / `forms:write` | `/v1/newsletters`, `/v1/contact-forms` (admin list/delete) |
+| `jobs:read` / `jobs:cancel` | `/v1/jobs` |
+| `webhooks:read` / `webhooks:write` | `/v1/webhook-endpoints`, `/v1/webhook-deliveries` |
 
-A `403 Forbidden` with `code: "forbidden"` is returned when the key lacks the
-required scope; the response includes the scope you'd need.
+A missing scope returns `403`:
 
 ```json
 {
-  "type": "https://api.neuraldraft.io/errors/forbidden",
+  "type": "https://neuraldraft.com/errors/insufficient-scope",
   "title": "Forbidden",
   "status": 403,
-  "code": "forbidden",
-  "detail": "This API key does not have the `commerce:write` scope.",
-  "instance": "req_2Nh4PqRsTuVw"
+  "detail": "This API key does not have the required scope: commerce:write.",
+  "code": "insufficient_scope",
+  "required_scope": "commerce:write"
 }
 ```
 
-## Common errors
+## Auth errors
 
-| Status | `code`              | When                                                                 |
-| ------ | ------------------- | -------------------------------------------------------------------- |
-| `401`  | `unauthorized`      | Missing, malformed, expired or revoked key.                          |
-| `403`  | `forbidden`         | Key is valid but lacks the required scope.                           |
-| `402`  | `insufficient_credits` | Project balance too low for the operation. Top up or upgrade.     |
-| `429`  | `rate_limited`      | Per-project window exhausted. See `Retry-After`.                     |
-| `503`  | `service_unavailable` | Backend dependency down. Retry with backoff.                       |
+| Status | `code` | When |
+| --- | --- | --- |
+| `401` | `missing_api_key` | No `Authorization` header. |
+| `401` | `invalid_api_key`, `revoked_api_key`, `expired_api_key` | Unknown, revoked or expired key. |
+| `403` | `insufficient_scope` | Valid key without the scope. |
+| `403` | `project_not_provisioned` | The workspace isn't ready yet. |
 
-Full error catalog: [errors](/errors).
+See [Errors](/errors) for the rest.
 
-## Best practices
+## Revoking and rotating
 
-<AccordionGroup>
-  <Accordion title="One key per environment">
-    Mint separate keys for production, staging, preview, and each developer
-    laptop. The audit log shows last-used timestamps per key — anomalies become
-    obvious.
-  </Accordion>
+Revoke a key in the admin or with `DELETE /v1/projects/me/api-keys/{id}`; it
+stops working right away. To rotate, create the new key, deploy it, then
+revoke the old one: a workspace can hold several active keys.
 
-  <Accordion title="Rotate quarterly">
-    Mint a new key, deploy with both old and new accepted (we accept multiple
-    valid keys per project), then revoke the old one once nothing 401s. The
-    dashboard has a one-click rotation flow that automates the overlap window.
-  </Accordion>
+## Several workspaces (agencies)
 
-  <Accordion title="Never commit a key">
-    Use environment variables. On Vercel/Netlify/Render, the encrypted env UI
-    is the right place. For local dev, a `.env` file in `.gitignore` and
-    `dotenv`-style loading. Our CLI refuses to write a key to disk outside of
-    a recognised secret manager.
-  </Accordion>
-
-  <Accordion title="Use least-privilege scopes">
-    A static-site builder needs `content:read` and `blog:read`, nothing more.
-    A scheduler-only service needs `social:write` and `social:publish`. Keys
-    leak; small blast radius is the only mitigation that works at scale.
-  </Accordion>
-
-  <Accordion title="Treat `ndsk_test_` as throwaway">
-    Test keys are fine to share with contractors, paste into Lovable previews,
-    or include in a public GitHub issue when reproducing a bug. They have a
-    separate credit pool that resets monthly and never bills.
-  </Accordion>
-
-  <Accordion title="Watch the audit log">
-    Every key has a `last_used_at` and a per-IP usage stripe in the dashboard.
-    Suspicious activity = a chance to rotate before damage compounds. Suspect
-    leakage? Revoke immediately; it takes effect within 60 seconds globally.
-  </Accordion>
-</AccordionGroup>
-
-## Revoking a key
-
-A revoked key starts returning `401 unauthorized` within ~60 seconds globally.
-Active jobs queued against the key continue to completion (they were
-authorised at submit time); new requests fail.
-
-```bash
-curl -X DELETE https://api.neuraldraft.io/v1/api-keys/key_2NgcaXxFqLPo \
-  -H "Authorization: Bearer $NEURALDRAFT_API_KEY"
-```
-
-Revocation is permanent; the key string can never be re-issued.
-
-## Multiple keys per project
-
-A project can hold up to **20 active keys**. Use this for environment
-separation and friction-free rotation:
-
-| Name              | Scopes                  | Where it lives                 |
-| ----------------- | ----------------------- | ------------------------------ |
-| `prod-server`     | `*` (or write scopes)   | Server-side, secret manager    |
-| `prod-builder`    | `content:read`, `blog:read` | CI build pipeline           |
-| `prod-mcp`        | `*`                     | Claude Code on dev laptops     |
-| `staging-server`  | `*`                     | Staging deployments            |
-| `lovable-preview` | `content:*`, `images:*` | Lovable's hosted preview env   |
-
-A 21st create attempt returns `409 Conflict` with `code: "key_limit_reached"` —
-revoke an unused one first.
-
-## Central login (multi-workspace accounts)
-
-If a single email is registered against more than one project (common for
-agencies and people running multiple sandboxes), the central login flow at
-[`app.neuraldraft.io`](https://app.neuraldraft.io) needs to know **which
-workspace** to drop the user into. Two endpoints power this — both live on
-the central host (`app.<central_domain>`), neither is a per-tenant API
-surface, and **neither uses an API key**: they're for the dashboard /
-admin SPA, not for server-to-server traffic.
-
-<Note>
-  The v1 Project API documented above is unchanged — these endpoints are a
-  separate auth path the dashboard uses to issue Sanctum tokens. Skip this
-  section if you're only consuming `/v1/*`.
-</Note>
-
-### `GET /central/api/tenants-for-email`
-
-Returns every workspace the email is registered against. Always 200; the
-response is constant-time across known/unknown emails to defeat
-enumeration. An unknown email returns `{ tenants: [] }`.
-
-```bash
-curl "https://app.neuraldraft.io/central/api/tenants-for-email?email=jane@example.com"
-```
-
-```json
-{
-  "tenants": [
-    { "id": 42, "name": "Acme",        "domain": "acme.neuraldraft.io" },
-    { "id": 87, "name": "Acme Studio", "domain": "studio.neuraldraft.io" }
-  ]
-}
-```
-
-If `tenants.length > 1`, render a workspace picker; otherwise log straight in.
-
-### `POST /central/api/login`
-
-Email + password authentication that issues a Sanctum token. The optional
-`tenant_id` disambiguates when the email is registered to multiple
-workspaces — pass it whenever the picker has a selection so iteration
-across candidates can't pick the wrong one (e.g. password rotated on one
-tenant but a stale row still points at another).
-
-```bash
-# Multi-workspace flow: explicit tenant_id from the picker
-curl -X POST https://app.neuraldraft.io/central/api/login \
-  -H "Content-Type: application/json" \
-  -d '{"email":"jane@example.com","password":"...","tenant_id":42}'
-```
-
-```json
-{
-  "token": "1|abcdef...",
-  "tenant": { "id": 42, "name": "Acme", "domain": "acme.neuraldraft.io" },
-  "user":   { "id": 7, "name": "Jane Doe", "email": "jane@example.com", "created_at": "..." }
-}
-```
-
-`tenant_id` is optional — if you omit it, the server iterates each candidate
-workspace and uses the first one whose password verifies. Iteration is
-case-insensitive on email. A wrong-password attempt always returns
-`422 Unprocessable Entity` with `auth.failed`, regardless of whether the
-email exists.
-
-## Where Sanctum and OAuth fit in
-
-The v1 Project API documented here is **API-key only**. The separate
-[Admin API](/api-reference) — used by white-label dashboards and agencies
-managing multiple projects — uses scoped Sanctum tokens (`tenants:read`,
-`posts:write`, …) and is documented in its own reference. If you're building
-your own admin UI on top of Neural Draft, that's the auth model you want; for
-everything else, stay here.
+A key never reaches another workspace. To work across clients, hold one key
+per client: `NEURALDRAFT_API_KEYS` in the [developer MCP](/mcp/multi-workspace)
+or `NeuralDraftWorkspaces` in the [SDK](/sdk#several-workspaces).

@@ -1,0 +1,141 @@
+---
+title: "TypeScript SDK"
+description: "@neuraldraft/sdk 0.4: typed access to /v1 for one workspace or many: site texts, pages, blog, bookings, forms, shop, social, webhooks."
+---
+
+```bash
+npm install @neuraldraft/sdk
+```
+
+Node 20+, Bun, Deno (`npm:`) or any runtime with `fetch`. Zero dependencies,
+ESM. Use it **server-side** (build step, backend, script): it sends the
+workspace's secret key. On the site itself use the [nd.js blocks](/guides/embeds-and-cors).
+
+## One workspace
+
+```ts
+import { NeuralDraftClient } from "@neuraldraft/sdk";
+
+const nd = NeuralDraftClient.fromEnv(); // reads NEURALDRAFT_API_KEY
+// or: new NeuralDraftClient({ apiKey: process.env.NEURALDRAFT_API_KEY! })
+
+const project = await nd.projects.me();
+```
+
+Options: `apiKey` (required), `apiUrl` (default
+`https://api.neuraldraft.io/v1`), `userAgent`, `timeout` (ms), `fetch`.
+
+## Several workspaces
+
+One key per client workspace. The format matches `@neuraldraft/mcp` 0.4
+(`NEURALDRAFT_API_KEYS`), so one `.env` serves both.
+
+```ts
+import { NeuralDraftWorkspaces } from "@neuraldraft/sdk";
+
+// NEURALDRAFT_API_KEYS="villa-lavanda=ndsk_live_…,linden-bakery=ndsk_live_…"
+// NEURALDRAFT_WORKSPACE="linden-bakery"   (optional: the active one)
+const ws = NeuralDraftWorkspaces.fromEnv();
+// or: new NeuralDraftWorkspaces({ keys: { "villa-lavanda": "ndsk_live_…", "linden-bakery": "ndsk_live_…" } })
+
+for (const name of ws.names()) {
+  const { meta } = await ws.get(name).bookings.list({ status: "pending" });
+  console.log(name, meta.total, "bookings waiting");
+}
+
+ws.use("villa-lavanda");
+await ws.current.siteTexts.list();
+```
+
+`get(name)` returns a normal `NeuralDraftClient` (created once, reused).
+`fromEnv` falls back to a single `NEURALDRAFT_API_KEY` as workspace `default`.
+
+## Site texts
+
+The blocks your client edits in Website → Edit site or by chat
+([Editable markup](/guides/editable-markup)).
+
+```ts
+const { blocks } = await nd.siteTexts.list({ search: "hours" });
+
+await nd.siteTexts.update({
+  texts: { hours: "Mon–Sat 6:00–14:00" },          // simple HTML: b, i, a, br
+  images: { hero: "https://cdn.example.com/new-hero.webp" },
+  lang: "en",                                      // default: the site's default language
+});
+// { language: "en", changed: ["hours", "hero"], unknown: [] }
+```
+
+Only existing keys change (others come back in `unknown`; pass
+`createMissing: true` to create them). Live at once, no redeploy, free.
+
+Lower level: `content.list({ lang, search, page_size })`, `content.get`,
+`content.set(key, value, lang)`, `content.translate(key, langs)` (10 credits
+per language), `content.delete`.
+
+## Resources
+
+| Resource | Methods |
+| --- | --- |
+| `projects` | `me`, `update` (incl. `allowed_origins`), `usage` |
+| `brand` | `get`, `update` |
+| `siteTexts` | `list`, `update` |
+| `content` | `list`, `get`, `set`, `bulkCreate`, `translate`, `delete` |
+| `pages` | `list`, `get`, `create`, `update`, `delete` |
+| `components` | `register`, `list`, `get`, `update`, `delete` |
+| `galleries` | `list`, `get`, `create`, `update`, `delete` |
+| `images` | `list`, `get`, `upload`, `replace`, `replaceFile`, `delete` (`generate` is deprecated: 410) |
+| `blogPosts` | `create`, `generateAi`, `list`, `get`, `update`, `translate`, `publish`, `unpublish`, `schedule`, `delete` |
+| `booking` | `listServices`, `getService`, `createService`, `updateService`, `deleteService`, `availability`, `getSettings`, `updateSettings`, `getWidget` |
+| `bookings` | `list`, `get`, `create`, `update`, `delete`, `confirm`, `cancel`, `complete`, `noShow`, `calendar`, `stats` |
+| `forms` | `listSubmissions`, `deleteSubmission`, `listSubscribers`, `deleteSubscriber` |
+| `products` | `list`, `get`, `create`, `update`, `delete`, `listVariants`, `createVariant`, `updateVariant`, `deleteVariant` |
+| `productCategories` | `list`, `get`, `create`, `update`, `delete` |
+| `orders` | `list`, `get`, `update`, `refund` |
+| `social` | `listAccounts`, `listPosts`, `getPost`, `createPost`, `updatePost`, `schedulePost`, `publishPost`, `deletePost` |
+| `webhooks` | `listEndpoints`, `createEndpoint`, `updateEndpoint`, `deleteEndpoint`, `rotateSecret`, `listDeliveries`, `getDelivery`, `retryDelivery` |
+| `jobs` | `get`, `cancel`, `poll` |
+
+## Examples
+
+```ts
+// Bookings
+const pending = await nd.bookings.list({ status: "pending" });
+await nd.bookings.confirm(pending.data[0].id);
+const free = await nd.booking.availability({ service_id: 12, from: "2026-11-02", to: "2026-11-06" });
+
+// Blog: your own post (free) or one researched and written by Neural Draft (60 credits)
+const post = await nd.blogPosts.create({ title: "Our new rye", content: "<p>…</p>", language_code: "en" });
+const job = await nd.blogPosts.generateAi({ topic: "How to store sourdough", word_count: 1200 });
+await nd.jobs.poll(job.id);
+
+// Shop
+const orders = await nd.orders.list({ status: "paid" });
+await nd.orders.update(orders.data[0].id, { status: "shipped", tracking_number: "RM123456GB" });
+
+// nd.js on another website
+await nd.projects.update({ allowed_origins: ["https://www.client.co.uk"] });
+```
+
+## Errors
+
+Non-2xx responses throw `ApiError` (`status`, `path`, `body` with the raw
+JSON). `status: 0` is a network failure or timeout.
+
+```ts
+import { ApiError } from "@neuraldraft/sdk";
+
+try {
+  await nd.blogPosts.generateAi({ topic: "…" });
+} catch (err) {
+  if (err instanceof ApiError) {
+    const { code } = JSON.parse(err.body || "{}") as { code?: string };
+    if (err.status === 402) { /* out of credits */ }
+    else if (err.status === 429) { /* rate limited: back off */ }
+    else throw err;
+  }
+}
+```
+
+Lists return `{ data, meta: { page, page_size, total, last_page } }`. Source
+and changelog: [github.com/vbalagovic/neuraldraft-sdk](https://github.com/vbalagovic/neuraldraft-sdk).

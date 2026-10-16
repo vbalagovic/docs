@@ -12,7 +12,7 @@ Slack/Discord, sync orders to your warehouse, or refresh a CDN cache.
 
 <Steps>
   <Step title="Stand up an endpoint">
-    Any HTTPS URL that responds 2xx within 30 seconds. Keep it cheap;
+    Any HTTPS URL that responds 2xx within 10 seconds. Keep it cheap;
     do the heavy work asynchronously after acknowledging.
 
     ```ts
@@ -83,7 +83,7 @@ Slack/Discord, sync orders to your warehouse, or refresh a CDN cache.
 | `booking.cancelled`         | A booking is cancelled (admin or customer).                             |
 | `booking.completed`         | A booking is marked complete after the appointment.                     |
 | `content.changed`           | A translation key value changes — useful for SSG rebuild triggers.      |
-| `image.generated`           | An async image generation job completes.                                |
+| `image.generated`           | Legacy: AI image generation is retired, so this no longer fires.        |
 | `connect.account_updated`   | Stripe Connect status changes (onboarding, requirements).               |
 
 A complete reference with payload schemas is on the
@@ -211,9 +211,9 @@ function verifyNeuralDraftSignature(
 
 ## Retry behavior
 
-If your endpoint doesn't respond `2xx` within 30 seconds, we retry with
-exponential backoff: 30 s, 2 m, 10 m, 1 h, 6 h. After 5 failed attempts the
-delivery is marked `failed` and visible in the dashboard.
+Each attempt waits up to 10 seconds for a `2xx`. A `4xx` answer marks the
+delivery failed straight away (fix your endpoint, then retry it). A `5xx`,
+timeout or network error is retried, up to 5 attempts in total:
 
 | Attempt | Delay since previous |
 | ------- | -------------------- |
@@ -222,17 +222,16 @@ delivery is marked `failed` and visible in the dashboard.
 | 3       | 2 minutes            |
 | 4       | 10 minutes           |
 | 5       | 1 hour               |
-| 6       | 6 hours              |
 
-You can manually replay any past delivery from the dashboard or via the API:
+Failed deliveries are listed with `GET /v1/webhook-deliveries` (and in the
+admin under Settings → For developers → Webhooks). Retry one by hand:
 
 ```bash
-curl -X POST https://api.neuraldraft.io/v1/webhook-endpoints/whe_.../deliveries/whd_.../redeliver \
+curl -X POST https://api.neuraldraft.io/v1/webhook-deliveries/{id}/retry \
   -H "Authorization: Bearer $NEURALDRAFT_API_KEY"
 ```
 
-The `data` payload is **always** the resource as it stood at delivery time
-(not the resource as it stands now). A redeliver replays the original payload.
+The `data` payload is the resource as it stood when the event happened.
 
 ## Best practices
 
@@ -254,9 +253,9 @@ The `data` payload is **always** the resource as it stood at delivery time
   </Accordion>
 
   <Accordion title="Rotate secrets">
-    Rotate the signing secret quarterly, or instantly if you suspect a leak.
-    The dashboard supports a transition window — both old and new secrets
-    accepted for up to 24 hours.
+    Rotate the signing secret with `POST /v1/webhook-endpoints/{id}/rotate-secret`
+    if you suspect a leak. The new secret is returned once and applies to the
+    next delivery, so deploy it promptly.
   </Accordion>
 
   <Accordion title="Monitor failures">
@@ -274,15 +273,10 @@ The `data` payload is **always** the resource as it stood at delivery time
 
 ## Local development
 
-Use [ngrok](https://ngrok.com), [Cloudflare Tunnel](https://github.com/cloudflare/cloudflared)
-or [Tailscale Funnel](https://tailscale.com/kb/1223/funnel) to forward your
-localhost to a public URL. Subscribe a test-mode endpoint with that URL, and
-trigger events from the dashboard's "send test event" button. The Inspector in
-the dashboard shows every delivery, signature, response code, and replay
-button.
+Use [ngrok](https://ngrok.com) or [Cloudflare Tunnel](https://github.com/cloudflare/cloudflared)
+to expose localhost, subscribe that URL, and use **Send test event** in the
+admin (Settings → For developers → Webhooks) to fire a signed sample.
 
-## What "billed" means
+## Cost
 
-Each delivery costs **0.02 credits**. Retries count — that's why fast,
-reliable acknowledgement saves you money. We cap retries at 5 to keep this
-predictable.
+Webhook deliveries use no credits.

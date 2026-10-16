@@ -1,0 +1,85 @@
+---
+title: "Editable markup"
+description: "Mark texts and pictures in your HTML so the client can change them without touching code or redeploying."
+---
+
+Three markers make a block editable. Use them in a site you deploy with
+`deploy_site`, in components of a JS app, or in a site hosted elsewhere.
+
+```html
+<h1 data-translate="hero.title">Fresh bread every morning</h1>
+<p><nd-text key="hours">Mon–Sat 7:00–15:00</nd-text></p>
+<img data-image-key="hero" src="/img/hero.jpg" alt="Our bakery">
+```
+
+(`data-nd-text` and `data-nd-image` are accepted as aliases.)
+
+## What happens on deploy
+
+- Each key is registered with the text or picture you deployed as its
+  starting value. The deploy result says how many editable blocks it found.
+- Values are applied **on the server** when the page is served, so they work
+  without JavaScript and search engines see them.
+- **A redeploy never overwrites a value the client edited.** To change a
+  default after the client edited it, change the value (admin,
+  `update_site_text` or `PUT /v1/content/{key}`), not the HTML.
+
+## Rules
+
+- Keys: letters, digits, dots and dashes (`hero.title`, `menu.2.price`). Case
+  sensitive.
+- One key can appear on several pages; it shows the same value everywhere.
+- Text values may contain simple formatting (bold, italic, links, line
+  breaks). Scripts and styles are stripped.
+- Pictures are stored as `image.<key>`.
+
+## Where the client edits them
+
+- **Admin:** Website → **Edit site** (click on the live page) or Website →
+  **Content** (a list). See [Client editing](/guides/client-editing).
+- **Chat:** "change our opening hours to 6–14" in Claude or ChatGPT; the
+  connector uses `list_site_texts` and `update_site_text`.
+- **API:** the same values are `/v1/content` keys (scope `global`).
+
+<CodeGroup>
+
+```bash cURL
+curl -X PUT https://api.neuraldraft.io/v1/content/hours \
+  -H "Authorization: Bearer $NEURALDRAFT_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"value":"Mon–Sat 6:00–14:00","lang":"en"}'
+```
+
+```ts SDK
+await nd.siteTexts.update({ texts: { hours: "Mon–Sat 6:00–14:00" }, lang: "en" });
+```
+
+</CodeGroup>
+
+Edits are public at once; no redeploy.
+
+## JS apps (React, Vue, Svelte…)
+
+Content rendered in the browser after load is filled by `nd.js`. Use the same
+markers in your components and include the script:
+
+```html
+<script src="/_nd/nd.js" defer></script>
+```
+
+`nd.js` fills blocks as they appear. After a manual render you can call
+`ND.applyContent(element)`. It reads `/_nd/api/content?keys=…&lang=…` on the
+site's own address (no key; public site text only). The language comes from
+`<body data-nd-lang>` or `<html lang>`.
+
+## Hosted pages
+
+Pages published with `publish_site_page` need no markers: every text and
+picture gets a key automatically on publish. Add `data-translate` yourself
+when you want stable, readable keys.
+
+## Developer MCP
+
+`@neuraldraft/mcp` exposes the same conventions as the resource
+`conventions://editable-html`, and `register_component` /
+`create_translation_keys` to register sections and keys while you build.

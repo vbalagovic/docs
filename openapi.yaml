@@ -2,7 +2,7 @@ openapi: 3.1.0
 info:
   title: Neural Draft Project API
   version: "1.0.1"
-  summary: The AI-native backend platform for Lovable / Claude / v0 / Bolt-built sites.
+  summary: Hosting-side backend (CMS, blog, bookings, forms, shop, social) for sites built with AI or by hand.
   description: |
     The **Neural Draft Project API** is the single REST contract every AI-built
     site, MCP server tool call, and SDK in our ecosystem speaks against. One
@@ -29,22 +29,22 @@ info:
 
     ## Credits
 
-    Most operations cost credits. Costs are documented per endpoint in this
-    spec and on the [pricing page](https://neuraldraft.io/pricing). When a
-    project has no credits left, every credit-consuming operation returns
+    1 credit = $0.01. Only AI work done by Neural Draft costs credits (blog
+    post 60, translation 10 per language); costs are noted per endpoint and on
+    the [pricing page](https://neuraldraft.io/pricing). When a workspace has
+    too few credits left, a credit-consuming operation returns
     `402 Payment Required` with `code: insufficient_credits`. The response
     includes `cost` (credits the operation needed) and `balance` (credits the
     project had on hand) so clients can render an exact top-up prompt.
 
-    Read-only endpoints (`GET`) do not consume credits. Mutating writes —
-    upserting a content key, creating or updating a page, registering an
-    image (URL swap or multipart upload) — cost **1 credit** each on top of
-    the AI-generation costs documented per endpoint.
+    Reads and non-AI writes (content keys, pages, components, galleries,
+    image uploads and URL swaps, bookings, orders, social posts you write)
+    cost **0 credits**. AI image and video generation is retired: those
+    endpoints answer `410` with `code: media_generation_moved`.
 
     ## Rate limits
 
-    Default project budget is **60 requests per minute**, burst **120**. Every
-    response includes:
+    **60 requests per minute per API key**. Every response includes:
 
     | Header | Meaning |
     |---|---|
@@ -53,12 +53,9 @@ info:
     | `X-RateLimit-Reset` | Unix seconds when bucket refills |
     | `Retry-After` | Seconds to wait, only on `429` |
 
-    Enterprise plans get higher budgets — contact sales.
-
     ## Async work
 
-    Long-running operations (blog generation, image generation, batch
-    translation, content plans, full website generation) return a
+    Long-running operations (blog generation and translation) return a
     [`Job`](#tag/Jobs) resource immediately with `202 Accepted` and
     `status: pending`. Two ways to track progress:
 
@@ -159,8 +156,8 @@ tags:
       bookings (admin + public), embeddable widget.
   - name: Commerce
     description: |
-      Commerce pillar — products, variants, categories, orders, Stripe
-      Checkout, Stripe Connect onboarding, embeddable widgets.
+      Commerce — products, variants, categories, orders, checkout. Card
+      payments: connect Stripe in the admin under Shop → Payouts.
   - name: Jobs
     description: |
       Async work tracking. Every long-running AI op (blog gen, image gen,
@@ -532,7 +529,7 @@ paths:
                         last_used_at: "2026-04-19T08:14:02Z"
                         created_at: "2026-02-14T09:32:00Z"
                       - id: key_2NgZBcmNop12
-                        name: Lovable build session
+                        name: Claude Code laptop
                         prefix: ndsk_live_
                         masked: ndsk_live_…aA12
                         scopes: ["*"]
@@ -835,6 +832,38 @@ paths:
               'headers' => ['Authorization' => 'Bearer '.$key],
               'json' => ['colors' => ['primary' => ['hex' => '#2A4A3C', 'name' => 'forest']]],
             ]);
+  /content:
+    get:
+      tags: [Content]
+      summary: List content keys
+      description: |
+        Paginated list of content keys (the editable texts of the site and
+        any keys you created), with the value in `lang` and every language in
+        `all_locales`. Read-only. Does not consume credits.
+      operationId: listContent
+      security:
+        - apiKeyAuth: []
+      parameters:
+        - { in: query, name: lang, schema: { type: string, example: en } }
+        - { in: query, name: search, schema: { type: string }, description: Substring match on the key. }
+        - { in: query, name: scope, schema: { type: string, enum: [page, component, global] } }
+        - { in: query, name: page, schema: { type: integer, minimum: 1 } }
+        - { in: query, name: page_size, schema: { type: integer, minimum: 1, maximum: 200, default: 50 } }
+      responses:
+        "200":
+          description: A page of content keys.
+          content:
+            application/json:
+              example:
+                data:
+                  - key: hours
+                    scope: global
+                    scope_id: null
+                    value: "Mon–Sat 7:00–15:00"
+                    all_locales: { en: "Mon–Sat 7:00–15:00", hr: "Pon–Sub 7:00–15:00" }
+                    updated_at: "2026-10-16T03:52:20+00:00"
+                meta: { page: 1, page_size: 50, total: 1, last_page: 1, lang: en }
+        "401": { $ref: "#/components/responses/Unauthorized" }
   /content/bulk:
     get:
       tags: [Content]
@@ -997,7 +1026,7 @@ paths:
         not exist, it is created. If `lang` is omitted, the project's default
         language is used.
 
-        Costs **1 credit** per successful upsert (`content_update`).
+        Free (0 credits).
 
         Fires a `content.changed` webhook event to subscribers.
       operationId: putContentKey
@@ -1103,7 +1132,7 @@ paths:
         Returns a [`Job`](#tag/Jobs) with `type: translation.batch`. Poll
         `GET /jobs/{id}` or stream `/jobs/{id}/stream` for progress.
 
-        Costs **7 credits per target language**. See [pricing](https://neuraldraft.io/pricing).
+        Costs **10 credits per target language**. See [pricing](https://neuraldraft.io/pricing).
       operationId: translateContentKey
       requestBody:
         required: true
@@ -1514,7 +1543,7 @@ paths:
         Create a `TenantPage` with optional SEO meta. Promoting a page to
         homepage demotes any previously-homepage page.
 
-        Costs **1 credit** per successful create (`page_update`).
+        Free (0 credits).
       operationId: createPage
       security:
         - apiKeyAuth: []
@@ -1566,7 +1595,7 @@ paths:
         preserved. Pass an explicit `null` to clear a meta field. Path
         parameter must be the numeric id (not slug) for this endpoint.
 
-        Costs **1 credit** per successful update (`page_update`).
+        Free (0 credits).
       operationId: updatePage
       security:
         - apiKeyAuth: []
@@ -1616,61 +1645,19 @@ paths:
         '422': { description: Cannot delete the homepage. }
   /videos:
     post:
-      tags: [Videos]
-      summary: Generate a premium video clip
+      tags: [Images]
+      summary: Video generation (retired)
+      deprecated: true
       description: |
-        Kicks off a short-form video generation. Two tiers — pick `tier=budget`
-        (default, Wan 2.1) for **40 credits** (`video`) or `tier=premium`
-        (Kling v2.1 / Runway Gen4) for **300 credits** (`video_premium`).
-        Premium requires a **Build** plan or higher; Free / Hobby projects
-        calling with `tier=premium` get `402 plan_required`. Returns a
-        [`Job`](#tag/Jobs) with `type: video.generate`; poll
-        `GET /jobs/{id}` for completion.
+        Retired. Always answers `410 Gone` with `code: media_generation_moved`.
+        We don't offer AI image or video creation. We craft finished static
+        ads and reels for your brand through the hosted connector.
       operationId: generateVideo
       security:
         - apiKeyAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [prompt]
-              properties:
-                prompt:
-                  type: string
-                  minLength: 3
-                  maxLength: 2000
-                  description: |
-                    What the video should show. Use visual / cinematic
-                    language: action verbs, camera movement, mood.
-                aspect_ratio:
-                  type: string
-                  enum: ['1:1', '16:9', '9:16', '4:3', '3:4', '3:2', '2:3']
-                  default: '9:16'
-                duration_seconds:
-                  type: integer
-                  minimum: 3
-                  maximum: 30
-                  default: 5
-                visual_style:
-                  type: string
-                  maxLength: 200
-                platforms:
-                  type: array
-                  items:
-                    type: string
-                    enum: [facebook, instagram, twitter, tiktok, linkedin]
       responses:
-        '202':
-          description: Job queued.
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  data: { $ref: '#/components/schemas/Job' }
-        '402': { $ref: "#/components/responses/PaymentRequired" }
+        '410':
+          description: AI video generation is retired.
   /galleries:
     get:
       tags: [Galleries]
@@ -1852,17 +1839,12 @@ paths:
       tags: [Images]
       summary: Generate or upload an image
       description: |
-        Two modes — discriminated by the request `Content-Type`:
+        **Upload** (`multipart/form-data`): synchronous, `file` and `key` are
+        required. Returns the registered [`Image`](#/components/schemas/Image).
+        Free. Max 10MB; jpg/jpeg/png/webp/gif/svg only.
 
-        1. **AI generation** (`application/json`) — kicks off async generation
-           inheriting the project's brand context. Returns a [`Job`](#tag/Jobs)
-           with `type: image.generate`. On completion, `result` contains
-           `{ url, key, width, height }`. Costs **32 credits** (`image`).
-        2. **Direct upload** (`multipart/form-data`) — synchronous swap with
-           the uploaded file bytes. `file` and `key` are required. Returns the
-           registered [`Image`](#/components/schemas/Image) immediately. Costs
-           **1 credit** (`image_register`). Max 10MB;
-           jpg/jpeg/png/webp/gif/svg only.
+        A JSON body with a `prompt` (AI generation) is retired and answers
+        `410 Gone` with `code: media_generation_moved`.
       operationId: createImage
       requestBody:
         required: true
@@ -2019,14 +2001,11 @@ paths:
 
         1. **Upload** — `multipart/form-data` with a `file` part. Synchronous;
            returns the updated [`Image`](#/components/schemas/Image).
-           **1 credit** (`image_register`). Max 10MB;
-           jpg/jpeg/png/webp/gif/svg only.
+           Free. Max 10MB; jpg/jpeg/png/webp/gif/svg only.
         2. **Direct URL** — `application/json` with `{ url }`. Synchronous;
-           returns the updated [`Image`](#/components/schemas/Image).
-           **1 credit** (`image_register`).
-        3. **Regenerate** — `application/json` with `{ regenerate: true, prompt, ... }`.
-           Returns a [`Job`](#tag/Jobs) and replaces the image when complete.
-           **32 credits** (`image`).
+           returns the updated [`Image`](#/components/schemas/Image). Free.
+        3. **Regenerate** (`{ regenerate: true, prompt }`) is retired and
+           answers `410` with `code: media_generation_moved`.
       operationId: replaceImage
       requestBody:
         required: true
@@ -2258,12 +2237,12 @@ paths:
 
         1. **Manual** — provide `title`, `content` (HTML), `excerpt`, etc. The
            post is saved immediately as a draft. Costs 0 credits.
-        2. **AI generation** — provide `ai: { topic, style?, word_count?,
-           translate_to_all?, primary_keyword?, ... }`. Returns a
+        2. **AI generation** — `type: "ai"` with `topic`, and optional `style`,
+           `word_count`, `translate_to_all`, `languages`, `primary_keyword`, …. Returns a
            [`Job`](#tag/Jobs) with `type: blog_post.generate`. The post
            appears in the database when the job completes. Costs **60 credits**
-           (`blog_post` — covers research, draft, and featured image; per-language
-           translations are billed separately at **7 credits per language**).
+           (`blog_post`: research, writing and its images; each extra language
+           is **10 credits**). Pass `generate_images: false` for a text-only post.
       operationId: createBlogPost
       requestBody:
         required: true
@@ -2627,7 +2606,7 @@ paths:
         [`Job`](#tag/Jobs) with `type: translation.batch`. On completion, the
         post's `translations[]` array contains the new locales.
 
-        Costs **7 credits per target language** (`translate_language`).
+        Costs **10 credits per target language** (`translate_language`).
       operationId: translateBlogPost
       requestBody:
         required: true
@@ -2679,7 +2658,7 @@ paths:
               'headers' => ['Authorization' => 'Bearer '.$key],
               'json' => ['target_langs' => ['fr','de','es']],
             ])->getBody(), true);
-  /categories:
+  /blog-posts/categories:
     get:
       tags: [Blog]
       summary: List blog categories
@@ -2708,7 +2687,7 @@ paths:
         - lang: curl
           label: cURL
           source: |
-            curl https://api.neuraldraft.io/v1/categories \
+            curl https://api.neuraldraft.io/v1/blog-posts/categories \
               -H "Authorization: Bearer ndsk_live_yourkey"
         - lang: node
           label: Node (SDK)
@@ -2717,7 +2696,7 @@ paths:
         - lang: python
           label: Python
           source: |
-            cats = requests.get("https://api.neuraldraft.io/v1/categories",
+            cats = requests.get("https://api.neuraldraft.io/v1/blog-posts/categories",
               headers={"Authorization": f"Bearer {key}"}).json()["data"]
         - lang: php
           label: PHP
@@ -2753,7 +2732,7 @@ paths:
         - lang: curl
           label: cURL
           source: |
-            curl -X POST https://api.neuraldraft.io/v1/categories \
+            curl -X POST https://api.neuraldraft.io/v1/blog-posts/categories \
               -H "Authorization: Bearer ndsk_live_yourkey" \
               -H "Content-Type: application/json" \
               -d '{"name":"Wellness"}'
@@ -2764,7 +2743,7 @@ paths:
         - lang: python
           label: Python
           source: |
-            cat = requests.post("https://api.neuraldraft.io/v1/categories",
+            cat = requests.post("https://api.neuraldraft.io/v1/blog-posts/categories",
               headers={"Authorization": f"Bearer {key}"}, json={"name":"Wellness"}).json()
         - lang: php
           label: PHP
@@ -2774,7 +2753,7 @@ paths:
               'headers' => ['Authorization' => 'Bearer '.$key],
               'json' => ['name' => 'Wellness'],
             ])->getBody(), true);
-  /categories/{id}:
+  /blog-posts/categories/{id}:
     parameters:
       - $ref: "#/components/parameters/CategoryIdPath"
     patch:
@@ -2803,7 +2782,7 @@ paths:
         - lang: curl
           label: cURL
           source: |
-            curl -X PATCH https://api.neuraldraft.io/v1/categories/7 \
+            curl -X PATCH https://api.neuraldraft.io/v1/blog-posts/categories/7 \
               -H "Authorization: Bearer ndsk_live_yourkey" \
               -H "Content-Type: application/json" \
               -d '{"name":"Wellness & Movement"}'
@@ -2814,7 +2793,7 @@ paths:
         - lang: python
           label: Python
           source: |
-            requests.patch("https://api.neuraldraft.io/v1/categories/7",
+            requests.patch("https://api.neuraldraft.io/v1/blog-posts/categories/7",
               headers={"Authorization": f"Bearer {key}"}, json={"name":"Wellness & Movement"})
         - lang: php
           label: PHP
@@ -2836,7 +2815,7 @@ paths:
         - lang: curl
           label: cURL
           source: |
-            curl -X DELETE https://api.neuraldraft.io/v1/categories/7 \
+            curl -X DELETE https://api.neuraldraft.io/v1/blog-posts/categories/7 \
               -H "Authorization: Bearer ndsk_live_yourkey"
         - lang: node
           label: Node (SDK)
@@ -2845,14 +2824,14 @@ paths:
         - lang: python
           label: Python
           source: |
-            requests.delete("https://api.neuraldraft.io/v1/categories/7",
+            requests.delete("https://api.neuraldraft.io/v1/blog-posts/categories/7",
               headers={"Authorization": f"Bearer {key}"})
         - lang: php
           label: PHP
           source: |
             <?php
             $client->delete('categories/7', ['headers' => ['Authorization' => 'Bearer '.$key]]);
-  /tags:
+  /blog-posts/tags:
     get:
       tags: [Blog]
       summary: List tags
@@ -2875,7 +2854,7 @@ paths:
         - lang: curl
           label: cURL
           source: |
-            curl https://api.neuraldraft.io/v1/tags \
+            curl https://api.neuraldraft.io/v1/blog-posts/tags \
               -H "Authorization: Bearer ndsk_live_yourkey"
         - lang: node
           label: Node (SDK)
@@ -2884,7 +2863,7 @@ paths:
         - lang: python
           label: Python
           source: |
-            tags = requests.get("https://api.neuraldraft.io/v1/tags",
+            tags = requests.get("https://api.neuraldraft.io/v1/blog-posts/tags",
               headers={"Authorization": f"Bearer {key}"}).json()["data"]
         - lang: php
           label: PHP
@@ -2918,7 +2897,7 @@ paths:
         - lang: curl
           label: cURL
           source: |
-            curl -X POST https://api.neuraldraft.io/v1/tags \
+            curl -X POST https://api.neuraldraft.io/v1/blog-posts/tags \
               -H "Authorization: Bearer ndsk_live_yourkey" \
               -H "Content-Type: application/json" \
               -d '{"name":"breathwork"}'
@@ -2929,7 +2908,7 @@ paths:
         - lang: python
           label: Python
           source: |
-            requests.post("https://api.neuraldraft.io/v1/tags",
+            requests.post("https://api.neuraldraft.io/v1/blog-posts/tags",
               headers={"Authorization": f"Bearer {key}"}, json={"name":"breathwork"})
         - lang: php
           label: PHP
@@ -2939,7 +2918,7 @@ paths:
               'headers' => ['Authorization' => 'Bearer '.$key],
               'json' => ['name' => 'breathwork'],
             ]);
-  /tags/{id}:
+  /blog-posts/tags/{id}:
     parameters:
       - $ref: "#/components/parameters/TagIdPath"
     delete:
@@ -2954,7 +2933,7 @@ paths:
         - lang: curl
           label: cURL
           source: |
-            curl -X DELETE https://api.neuraldraft.io/v1/tags/21 \
+            curl -X DELETE https://api.neuraldraft.io/v1/blog-posts/tags/21 \
               -H "Authorization: Bearer ndsk_live_yourkey"
         - lang: node
           label: Node (SDK)
@@ -2963,7 +2942,7 @@ paths:
         - lang: python
           label: Python
           source: |
-            requests.delete("https://api.neuraldraft.io/v1/tags/21",
+            requests.delete("https://api.neuraldraft.io/v1/blog-posts/tags/21",
               headers={"Authorization": f"Bearer {key}"})
         - lang: php
           label: PHP
@@ -3057,12 +3036,9 @@ paths:
 
         1. **Manual** — provide `title`, `platforms`, and per-platform copy
            (`facebook_content`, `instagram_content`, …). Saved as draft. 0 credits.
-        2. **AI generation** — provide `ai: { topic|post_id, tone, platforms,
-           media_type, ... }`. Returns a [`Job`](#tag/Jobs) with
-           `type: social_post.generate`. Costs **5 credits** (`social_post`) for
-           the text base; if `media_type=image` an additional **32 credits**
-           (`image`) is charged, and if `media_type=video` an additional
-           **40 credits** (`video`, budget tier) is charged against the same job.
+        2. **Captions by Neural Draft** — `type: "ai"` with `topic`,
+           `platforms`, optional `tone`. Returns a [`Job`](#tag/Jobs); the post
+           is saved as a text-only draft. Costs **2 credits** (`social_post`).
       operationId: createSocialPost
       requestBody:
         required: true
@@ -4195,8 +4171,13 @@ paths:
           source: |
             <?php
             $b = json_decode(file_get_contents('https://api.neuraldraft.io/v1/public/bookings/BK-20260419-AB12?email=anna@example.com'), true);
-  /widgets/booking/{service_id}.js:
+  /widgets/booking/{tenant_id}/{service_id}.js:
     parameters:
+      - in: path
+        name: tenant_id
+        required: true
+        description: Workspace id (`id` from `GET /projects/me`).
+        schema: { type: integer }
       - in: path
         name: service_id
         required: true
@@ -4210,7 +4191,7 @@ paths:
 
         ```html
         <div data-nd-booking="12"></div>
-        <script src="https://api.neuraldraft.io/v1/widgets/booking/12.js" defer></script>
+        <script src="https://api.neuraldraft.io/v1/widgets/booking/42/12.js" defer></script>
         ```
 
         The MCP server's `setup_booking_widget` tool returns the URL to this
@@ -4231,12 +4212,12 @@ paths:
         - lang: curl
           label: cURL
           source: |
-            curl https://api.neuraldraft.io/v1/widgets/booking/12.js -o booking.js
+            curl https://api.neuraldraft.io/v1/widgets/booking/42/12.js -o booking.js
         - lang: node
           label: Node
           source: |
             // No SDK call — embed the URL directly in your HTML.
-            // <script src="https://api.neuraldraft.io/v1/widgets/booking/12.js" defer></script>
+            // <script src="https://api.neuraldraft.io/v1/widgets/booking/42/12.js" defer></script>
         - lang: python
           label: Python
           source: |
@@ -4244,7 +4225,7 @@ paths:
         - lang: php
           label: PHP (Blade)
           source: |
-            <script src="https://api.neuraldraft.io/v1/widgets/booking/{{ $serviceId }}.js" defer></script>
+            <script src="https://api.neuraldraft.io/v1/widgets/booking/42/{{ $serviceId }}.js" defer></script>
             <div data-nd-booking="{{ $serviceId }}"></div>
   /products:
     get:
@@ -5193,79 +5174,13 @@ paths:
               'headers' => ['Authorization' => 'Bearer '.$key],
               'json' => ['items'=>[['product_id'=>32,'quantity'=>1]],'customer'=>['name'=>'Anna','email'=>'anna@example.com'],'success_url'=>'https://lakesideyoga.uk/success','cancel_url'=>'https://lakesideyoga.uk/cart'],
             ])->getBody(), true);
-  /connect/onboarding:
-    post:
-      tags: [Commerce]
-      summary: Start Stripe Connect onboarding
-      description: |
-        Creates (or reuses) a Stripe Connect Express account for the project
-        and returns a Stripe-hosted onboarding URL. After the user completes
-        onboarding, they're sent to `return_url`. If they bail mid-flow,
-        Stripe sends them to `refresh_url` to restart.
-      operationId: startConnectOnboarding
-      requestBody:
-        required: false
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                return_url:
-                  type: string
-                  format: uri
-                  example: https://app.lakesideyoga.uk/settings/payments?status=connected
-                refresh_url:
-                  type: string
-                  format: uri
-                  example: https://app.lakesideyoga.uk/settings/payments?status=resume
-      responses:
-        "200":
-          description: Onboarding URL.
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [url, existing_account]
-                properties:
-                  url: { type: string, format: uri }
-                  existing_account: { type: boolean }
-              examples:
-                fresh:
-                  value:
-                    url: https://connect.stripe.com/setup/e/abcdef
-                    existing_account: false
-        "400": { $ref: "#/components/responses/BadRequest" }
-        "401": { $ref: "#/components/responses/Unauthorized" }
-      x-codeSamples:
-        - lang: curl
-          label: cURL
-          source: |
-            curl -X POST https://api.neuraldraft.io/v1/connect/onboarding \
-              -H "Authorization: Bearer ndsk_live_yourkey" \
-              -H "Content-Type: application/json" \
-              -d '{"return_url":"https://app.lakesideyoga.uk/settings/payments?status=connected"}'
-        - lang: node
-          label: Node (SDK)
-          source: |
-            const { url } = await nd.connect.onboarding({
-              returnUrl: "https://app.lakesideyoga.uk/settings/payments?status=connected",
-            });
-        - lang: python
-          label: Python
-          source: |
-            r = requests.post("https://api.neuraldraft.io/v1/connect/onboarding",
-              headers={"Authorization": f"Bearer {key}"},
-              json={"return_url":"https://app.lakesideyoga.uk/settings/payments?status=connected"})
-        - lang: php
-          label: PHP
-          source: |
-            <?php
-            $onboard = json_decode((string) $client->post('connect/onboarding', [
-              'headers' => ['Authorization' => 'Bearer '.$key],
-              'json' => ['return_url' => 'https://app.lakesideyoga.uk/settings/payments?status=connected'],
-            ])->getBody(), true);
-  /widgets/product-card/{product_id}.js:
+  /widgets/product-card/{tenant_id}/{product_id}.js:
     parameters:
+      - in: path
+        name: tenant_id
+        required: true
+        description: Workspace id (`id` from `GET /projects/me`).
+        schema: { type: integer }
       - in: path
         name: product_id
         required: true
@@ -5278,7 +5193,7 @@ paths:
 
         ```html
         <div data-nd-product-card="32"></div>
-        <script src="https://api.neuraldraft.io/v1/widgets/product-card/32.js" defer></script>
+        <script src="https://api.neuraldraft.io/v1/widgets/product-card/42/32.js" defer></script>
         ```
 
         Reads from `/v1/public/products/{slug}` under the hood. Long-cached
@@ -5299,7 +5214,7 @@ paths:
         - lang: curl
           label: cURL
           source: |
-            curl https://api.neuraldraft.io/v1/widgets/product-card/32.js -o pc.js
+            curl https://api.neuraldraft.io/v1/widgets/product-card/42/32.js -o pc.js
         - lang: node
           label: Node
           source: |
@@ -5312,9 +5227,14 @@ paths:
           label: PHP (Blade)
           source: |
             <div data-nd-product-card="{{ $productId }}"></div>
-            <script src="https://api.neuraldraft.io/v1/widgets/product-card/{{ $productId }}.js" defer></script>
-  /widgets/buy-button/{product_id}.js:
+            <script src="https://api.neuraldraft.io/v1/widgets/product-card/42/{{ $productId }}.js" defer></script>
+  /widgets/buy-button/{tenant_id}/{product_id}.js:
     parameters:
+      - in: path
+        name: tenant_id
+        required: true
+        description: Workspace id (`id` from `GET /projects/me`).
+        schema: { type: integer }
       - in: path
         name: product_id
         required: true
@@ -5328,7 +5248,7 @@ paths:
 
         ```html
         <div data-nd-buy-button="32" data-variant-id="71"></div>
-        <script src="https://api.neuraldraft.io/v1/widgets/buy-button/32.js" defer></script>
+        <script src="https://api.neuraldraft.io/v1/widgets/buy-button/42/32.js" defer></script>
         ```
       operationId: getBuyButtonWidget
       security: []
@@ -5346,7 +5266,7 @@ paths:
         - lang: curl
           label: cURL
           source: |
-            curl https://api.neuraldraft.io/v1/widgets/buy-button/32.js -o buy.js
+            curl https://api.neuraldraft.io/v1/widgets/buy-button/42/32.js -o buy.js
         - lang: node
           label: Node
           source: |
@@ -5359,7 +5279,7 @@ paths:
           label: PHP (Blade)
           source: |
             <div data-nd-buy-button="{{ $id }}"></div>
-            <script src="https://api.neuraldraft.io/v1/widgets/buy-button/{{ $id }}.js" defer></script>
+            <script src="https://api.neuraldraft.io/v1/widgets/buy-button/42/{{ $id }}.js" defer></script>
   /jobs/{id}:
     parameters:
       - $ref: "#/components/parameters/JobIdPath"
@@ -6216,30 +6136,47 @@ components:
         uptime_s: { type: integer, example: 184523 }
     Project:
       type: object
-      required: [id, name, slug, default_language, target_languages, plan, created_at]
+      required: [id, name, domain, default_language, target_languages, created_at]
       properties:
-        id: { type: string, example: prj_2NfQmBcKpXY8 }
-        name: { type: string, example: Lakeside Yoga }
-        slug: { type: string, example: lakeside-yoga }
-        industry: { type: [string, "null"], example: wellness  }
+        id: { type: integer, example: 152 }
+        name: { type: string, example: Linden Bakery }
+        slug: { type: [string, "null"], example: linden-bakery }
+        description: { type: [string, "null"] }
+        domain: { type: string, example: linden-bakery.neuraldraft.io }
+        custom_domain: { type: [string, "null"], example: www.lindenbakery.co.uk }
         default_language: { type: string, example: en }
         target_languages:
           type: array
           items: { type: string }
-          example: [en, fr, de]
-        timezone: { type: string, example: Europe/London }
-        plan: { type: string, enum: [free, hobby, build, scale, enterprise], example: hobby }
+          example: [hr, de]
+        plan_type: { type: [string, "null"], description: "free, hobby (Solo), build (Studio), or a legacy plan", example: hobby }
+        credits_balance: { type: integer, example: 2940 }
+        commerce_enabled: { type: boolean }
+        booking_enabled: { type: boolean }
+        allowed_origins:
+          type: array
+          description: Other websites allowed to use this workspace's nd.js blocks (see Embeds and CORS).
+          items: { type: string }
+          example: ["https://www.client.co.uk"]
         created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
     ProjectUpdate:
       type: object
       properties:
         name: { type: string }
-        industry: { type: string }
+        project_description: { type: [string, "null"] }
         default_language: { type: string }
         target_languages:
           type: array
           items: { type: string }
-        timezone: { type: string }
+        allowed_origins:
+          type: array
+          description: |
+            Replaces the list of extra origins allowed to use nd.js blocks
+            (https only, `http://localhost:<port>` for testing, at most 20, no
+            path). `[]` clears it. The workspace address, its custom domains
+            and the saved website are always allowed.
+          items: { type: string }
     Usage:
       type: object
       required: [period_start, period_end, plan, plan_credits, credits_used, credits_remaining, breakdown]

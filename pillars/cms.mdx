@@ -15,7 +15,7 @@ field in the project's admin — no schemas, no migrations, no glue code.
   customer can swap the image in the admin; your build resolves the URL.
 - **Brand context** — voice, colors, fonts, audience exposed as a single
   resource. Read once at build time, or hot-fetch per request.
-- **Register-component** — turn AI-generated HTML into an admin-editable
+- **Register-component** — turn generated HTML into an admin-editable
   section in one call, with `data-translate` keys auto-discovered.
 
 ## Quick example
@@ -33,7 +33,7 @@ const nd = new NeuralDraftClient({ apiKey: process.env.NEURALDRAFT_API_KEY! });
 const hero = await nd.content.get("hero.headline", { lang: "en" });
 console.log(hero.value);
 
-// Upsert (creates if missing). Charges 1 credit (`content_update`).
+// Upsert (creates if missing). Free.
 await nd.content.set("hero.headline", "Welcome to Acme", "en");
 ```
 
@@ -55,12 +55,9 @@ Bulk read response shape:
 
 ```json
 {
-  "data": {
-    "hero.headline": "Welcome",
-    "hero.subhead": "We build software that scales.",
-    "cta.label": "Get started"
-  },
-  "meta": { "lang": "en", "page": 1, "page_size": 200, "total": 3 }
+  "hero.headline": "Welcome",
+  "hero.subhead": "We build software that scales.",
+  "cta.label": "Get started"
 }
 ```
 
@@ -80,12 +77,10 @@ await nd.content.bulkCreate(
 ```
 
 <Note>
-  **CMS writes cost 1 credit each.** `PUT /v1/content/{key}` (`content_update`),
-  `POST`/`PATCH /v1/pages` (`page_update`), and registering an image via URL
-  swap on `PUT /v1/images/{key}` or multipart upload on `POST /v1/images`
-  (`image_register`) each consume 1 credit on success. AI generation
-  (image, translation, blog, website) is metered separately at its own rate.
-  Reads (`GET`) remain free. See [pricing](/pricing-and-credits).
+  **CMS writes are free.** Content, page, component, gallery and image writes
+  through the API or MCP use no credits (rate limits apply). Credits are only
+  used when Neural Draft's AI does the work, such as translating a key (10 per
+  language). See [Credits and pricing](/pricing-and-credits).
 </Note>
 
 ## Common workflows
@@ -96,17 +91,14 @@ Static-site generators (Next.js, Astro, Nuxt, Hugo) call `/v1/content/bulk`
 once per locale at build time. Cache the response — re-fetch only when the
 `content.changed` webhook fires.
 
-### 2. Click-to-edit overlay on a live site
+### 2. The client edits the live site
 
-Drop a tiny JS snippet into your HTML. It looks for `data-translate`
-attributes and turns them into inline-editable fields when the user is signed
-into the admin in the same browser.
-
-```html
-<script src="https://widgets.neuraldraft.io/v1/edit-overlay.js" defer></script>
-```
-
-The overlay calls `/v1/content/{key}` on save. Same backend, no rebuild.
+Texts and pictures marked with `data-translate`, `<nd-text>` or
+`data-image-key` are editable in the admin's visual editor (Website → Edit
+site) and by chat in Claude or ChatGPT, without a rebuild. A static build that
+reads `/v1/content` at build time should rebuild on the `content.changed`
+webhook; a site hosted on Neural Draft or using `nd.js` updates by itself. See
+[Editable markup](/guides/editable-markup) and [Client editing](/guides/client-editing).
 
 ### 3. AI registers a generated section
 
@@ -150,7 +142,7 @@ curl -X POST https://api.neuraldraft.io/v1/content/hero.headline/translate \
 
 Returns a `Job` reference. Poll [`/v1/jobs/{id}`](/api-reference#tag/Jobs) (or
 `nd.jobs.poll(id)`) until terminal, or subscribe to the `content.changed`
-webhook to get notified once each language lands. Charges **7 credits per
+webhook to get notified once each language lands. Charges **10 credits per
 target language** (`translate_language`).
 
 ### 5. Brand context for AI prompts
@@ -244,7 +236,7 @@ const page = await nd.pages.get("about");
 //   ...
 // }
 
-// Create a page with SEO meta in one call (1 credit)
+// Create a page with SEO meta in one call (free)
 await nd.pages.create({
   slug: "about",
   title: "About us",
@@ -311,22 +303,13 @@ For a blog post the same template applies, swapping `page.og_image` with
 
 ## Images
 
-Three flavours, all routing through the same `Image` resource:
+Image keys bind a stable key to a picture URL:
 
 ```ts
-// 1. AI-generate (32 credits, async — returns a Job)
-const job = await nd.images.generate({
-  prompt: "warm morning light over a yoga mat, soft focus",
-  aspect_ratio: "16:9",
-  key: "hero.background",
-});
-const finished = await nd.jobs.poll(job.id);
-// finished.result => { url, key, width, height }
-
-// 2. Direct upload from a File / Blob / Buffer (1 credit, sync)
+// Upload a File / Blob / Buffer (free, sync)
 await nd.images.upload("hero.background", file, { filename: "hero.jpg" });
 
-// 3. Replace by URL — no AI roundtrip (1 credit, sync)
+// Point a key at an existing URL (free, sync)
 await nd.images.replace("hero.background", { url: "https://cdn.example.com/x.jpg" });
 
 // Resolve / list / delete
@@ -335,18 +318,21 @@ const { data } = await nd.images.list({ prefix: "hero.", page_size: 50 });
 await nd.images.delete("hero.background");
 ```
 
-Both `upload()` and `replaceFile()` accept a Web `File`/`Blob` (browser, Bun,
-Node 20+) or a Node `Buffer`/`Uint8Array`. For raw buffers, supply
-`opts.filename` so the server can derive the file extension.
+`upload()` and `replaceFile()` accept a Web `File`/`Blob` or a Node
+`Buffer`/`Uint8Array` (pass `opts.filename` for raw buffers). AI image
+generation (`POST /v1/images` with a `prompt`, or regenerate) is retired and
+answers `410 media_generation_moved`: we don't offer AI image or video
+creation. We craft finished static ads and reels for your brand.
 
 ## Reference
 
 | Endpoint                                       | Tag       |
 | ---------------------------------------------- | --------- |
+| `GET /v1/content`                              | [Content](/api-reference#tag/Content)    |
 | `GET /v1/content/bulk`                         | [Content](/api-reference#tag/Content)    |
 | `GET /v1/content/{key}`                        | [Content](/api-reference#tag/Content)    |
 | `PUT /v1/content/{key}`                        | [Content](/api-reference#tag/Content)    |
-| `PUT /v1/content` (batch)                      | [Content](/api-reference#tag/Content)    |
+| `DELETE /v1/content/{key}`                     | [Content](/api-reference#tag/Content)    |
 | `POST /v1/content/{key}/translate`             | [Content](/api-reference#tag/Content)    |
 | `POST /v1/components/register`                 | [Components](/api-reference#tag/Components) |
 | `GET /v1/components`                           | [Components](/api-reference#tag/Components) |
@@ -359,8 +345,8 @@ Node 20+) or a Node `Buffer`/`Uint8Array`. For raw buffers, supply
 | `PATCH /v1/brand`                              | [Brand](/api-reference#tag/Brand)        |
 | `GET /v1/images`                               | [Images](/api-reference#tag/Images)      |
 | `GET /v1/images/{key}`                         | [Images](/api-reference#tag/Images)      |
-| `POST /v1/images` (AI generate or multipart upload) | [Images](/api-reference#tag/Images) |
-| `PUT /v1/images/{key}` (multipart, URL swap, or regenerate) | [Images](/api-reference#tag/Images) |
+| `POST /v1/images` (multipart upload) | [Images](/api-reference#tag/Images) |
+| `PUT /v1/images/{key}` (multipart or URL swap) | [Images](/api-reference#tag/Images) |
 | `DELETE /v1/images/{key}`                      | [Images](/api-reference#tag/Images)      |
 | `POST /v1/newsletters/subscribe` (public)      | [Forms](/api-reference#tag/Forms)        |
 | `GET /v1/newsletters`                          | [Forms](/api-reference#tag/Forms)        |

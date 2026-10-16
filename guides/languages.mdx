@@ -1,0 +1,63 @@
+---
+title: "Languages"
+description: "Multilingual sites: per-language values for every key, translation by your assistant (free) or by Neural Draft, and language switching."
+---
+
+Every editable text is stored per language under one key. The workspace has a
+default language plus target languages (`GET /v1/projects/me` →
+`default_language`, `target_languages`).
+
+## Hosted pages
+
+`translate_site` (hosted connector) adds languages to published pages. They
+are served at `/<lang>/…` with `hreflang` tags and a language switcher.
+
+- **Default, free:** call it without translations to get the texts, let your
+  assistant translate them, then call again with
+  `translations={ "hr": { "home.h1.ab12cd34": "…" } }` and `confirm: true`.
+- `mode: "auto"`: Neural Draft translates (10 credits per language).
+
+## Deployed sites and JS apps
+
+Set values per language on the same keys:
+
+<CodeGroup>
+
+```bash cURL
+curl -X PUT https://api.neuraldraft.io/v1/content/hero.title \
+  -H "Authorization: Bearer $NEURALDRAFT_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"value":"Svježi kruh svako jutro","lang":"hr"}'
+```
+
+```ts SDK
+await nd.siteTexts.update({ texts: { "hero.title": "Svježi kruh svako jutro" }, lang: "hr" });
+```
+
+</CodeGroup>
+
+Or ask the connector: `update_site_text` takes a `language`.
+
+The server serves the default language. For other languages, `nd.js` fills the
+marked blocks in the page's language, taken from `<body data-nd-lang="hr">` or
+`<html lang="hr">`, falling back to the default when a value is missing.
+
+## Machine translation by Neural Draft
+
+`POST /v1/content/{key}/translate` with `{"target_langs": ["de","fr"]}` returns
+a [job](/api-reference#tag/Jobs). Blog posts:
+`POST /v1/blog-posts/{id}/translate` with `{"target_languages": ["de"]}`.
+Both cost 10 credits per language. Translating with your own assistant and
+writing the result is free.
+
+## Blocks and switcher
+
+- `<nd-language-switcher>` lists the site's languages.
+- `nd.js` blocks (`nd-form`, `nd-booking`, `nd-blog-feed`…) use the page
+  language for their own labels.
+- `GET /v1/content?lang=hr` and `GET /v1/content/bulk?keys=a,b&lang=hr` read
+  values for a headless site.
+
+## Limits
+
+Site languages per plan: Free 2, Solo 6, Studio 20 (including the default).

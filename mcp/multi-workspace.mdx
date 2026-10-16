@@ -1,0 +1,63 @@
+---
+title: "Several workspaces"
+description: "One @neuraldraft/mcp server holding a key for every client workspace, with list_workspaces and switch_workspace (0.4.0+)."
+---
+
+Agencies and people with several businesses have one workspace each, and each
+workspace has its own API key. Since **0.4.0** one server can hold all of
+them.
+
+```json
+{
+  "mcpServers": {
+    "neuraldraft": {
+      "command": "npx",
+      "args": ["-y", "@neuraldraft/mcp"],
+      "env": {
+        "NEURALDRAFT_API_KEYS": "villa-lavanda=ndsk_live_…,linden-bakery=ndsk_live_…",
+        "NEURALDRAFT_WORKSPACE": "villa-lavanda"
+      }
+    }
+  }
+}
+```
+
+- `NEURALDRAFT_API_KEYS`: `name=key` pairs separated by commas or new lines,
+  or a JSON object `{"villa-lavanda": "ndsk_live_…"}`. Names are yours to
+  choose (the client's name works well).
+- `NEURALDRAFT_WORKSPACE`: the active one at start; default the first.
+- If both `NEURALDRAFT_API_KEY` and `NEURALDRAFT_API_KEYS` are set, the single
+  key is used unless `NEURALDRAFT_WORKSPACE` names one of the list.
+
+Claude Code in one line:
+
+```bash
+claude mcp add neuraldraft -e NEURALDRAFT_API_KEYS="villa-lavanda=ndsk_live_…,linden-bakery=ndsk_live_…" -- npx -y @neuraldraft/mcp
+```
+
+## Tools
+
+| Tool | What it does |
+| --- | --- |
+| `list_workspaces` | The configured names, the brand behind each key, and which one is active. |
+| `switch_workspace` | `{ "workspace": "linden-bakery" }`: every following tool acts on that workspace until you switch again. |
+
+Every other tool acts on the active workspace. Ask the assistant to confirm
+the active workspace before changing a client's site:
+
+> Switch to linden-bakery, then list its pages.
+
+A key only ever reaches its own workspace, so one client's tools can't touch
+another's data.
+
+## Versions
+
+`npx -y @neuraldraft/mcp` always fetches the latest. Pin with
+`@neuraldraft/mcp@0.4.0` if you need to. Before 0.4.0 the package ignored
+`NEURALDRAFT_API_KEYS`; with an older pinned version add one server entry per
+client instead.
+
+## In your own code
+
+The SDK has the same model: `NeuralDraftWorkspaces` reads the same
+`NEURALDRAFT_API_KEYS` format. See [SDK → Several workspaces](/sdk#several-workspaces).
