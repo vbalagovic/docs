@@ -1,0 +1,96 @@
+---
+title: "New pages and the blog in your design"
+description: "Clients add pages and sub-pages from the site's own pages; the blog is drawn inside the site's header and footer."
+---
+
+A hosted site keeps growing after you hand it over. The client adds pages
+themselves, and the blog uses the site's own design. Neither changes your
+files.
+
+## New page from a template
+
+In the admin, **Website → Pages → New page**:
+
+1. Pick a page to start from (the home page by default).
+2. Give it a title and an address. Sub-pages work: `/services/wedding-cakes`.
+3. Choose **a copy** of that page (its texts and pictures become the new
+   page's own, so editing them leaves the template alone) or **an empty
+   section** (a heading and a paragraph in the site's styles).
+4. Optionally add a link to the site's menu.
+
+The page keeps the template's layout, header, footer, CSS and JavaScript. It is
+served at its address in every language (`/hr/services/wedding-cakes`), listed
+in Website → Pages with its SEO fields, and added to the sitemap. Clients can
+take pages they added offline or delete them; the pages you built stay.
+
+Agencies can turn this off per client ("Clients can add pages", on by default).
+
+## Which part of the page changes
+
+Only the template's main content area. Neural Draft uses the first of:
+
+1. the element you mark with `data-nd-content`;
+2. `<main>`;
+3. everything between the site header (`<header>`, else the first `<nav>`) and
+   the site footer;
+4. the whole `<body>`.
+
+```html
+<body>
+  <header>…logo, menu…</header>
+  <div class="page" data-nd-content>
+    <!-- replaced on new pages and on the blog -->
+  </div>
+  <footer>…</footer>
+</body>
+```
+
+Relative links and pictures keep working from sub-paths, and header links to
+the template's sections (`#cakes`) point back to the template page. The menu
+link is a copy of one of your own menu links (any `<nav>` with two or more
+links outside the footer), so it looks like the rest of the menu.
+
+## The blog in the site's design
+
+On an own-design site, `/blog` and every post render inside the home page's
+header and footer, with your fonts and CSS, in every language, with RSS and
+sitemap entries. After the first post is published, a **Blog** link is added
+to the menu; it can be switched off in Website → Pages. Sites hosted elsewhere
+keep showing the blog through the API or the embeds.
+
+## From code
+
+```ts
+import { NeuralDraftClient } from "@neuraldraft/sdk"; // 0.4.1+
+
+const nd = new NeuralDraftClient({ apiKey: process.env.NEURALDRAFT_API_KEY! });
+const page = await nd.sitePages.create({
+  title: "Wedding cakes",
+  path: "services/wedding-cakes",
+  template: "/",
+  content: "copy",
+  menu: true,
+});
+await nd.sitePages.update("services/wedding-cakes", { published: false });
+await nd.sitePages.delete("services/wedding-cakes");
+```
+
+Or the API directly (scopes `pages:read`, `pages:write`):
+
+```bash
+curl -X POST https://api.neuraldraft.io/v1/site/pages \
+  -H "Authorization: Bearer $NEURALDRAFT_API_KEY" -H "Content-Type: application/json" \
+  -d '{"title":"Wedding cakes","path":"services/wedding-cakes","template":"/","menu":true}'
+```
+
+| Method | Path | What it does |
+|---|---|---|
+| `GET` | `/v1/site/pages` | The site's pages, and which were added from a template |
+| `POST` | `/v1/site/pages` | New page: `title`, `path`, `template`, `content` (`copy` or `empty`), `menu`, `published` |
+| `PATCH` | `/v1/site/pages/{path}` | `title`, `published`, `menu`, `description` of an added page |
+| `DELETE` | `/v1/site/pages/{path}` | Delete an added page |
+
+With the developer MCP (`@neuraldraft/mcp` 0.4.1+), ask for it: "add a
+wedding cakes page under services, from the home page, in the menu". In
+Claude or ChatGPT with the hosted connector, the same request works for the
+client.
